@@ -21,31 +21,35 @@ TODO add description
 
 import argparse
 import csv
-import dotenv
 import os
+import json
 import sys
 
+import dotenv
 import notion_client
 
+import inventory
 
-optional_bom_fields = {
-    'Description': {},      # For manual review only
-    'Designator': {},       # For manual review only
-    # 'Revision Status': {}, #TODO doesn't work?
-    'JLCPCB Part Type': {}  # Only matters for JLC price esimation
-}
+required_bom_fields = [
+    'Comment',
+    'Quantity',
+    'Digi-Key Part Number',
+    'Mouser Part Number',
+    'JLCPCB Part Number',
+]
 
-required_bom_fields = {
-    'Comment': {
-        'notion': 'Part Number/title/plain_text'
-    },
-    'Quantity': {
-        'notion': 'Current Quantity/number'
-    },
-    'Digi-Key Part Number': {},
-    'Mouser Part Number': {},
-    'JLCPCB Part Number': {}
-}
+optional_bom_fields = [
+    'Description',          # For manual review only
+    'Designator',           # For manual review only
+    # 'Revision Status',    #TODO doesn't work?
+    'JLCPCB Part Type'      # Only matters for JLC price esimation
+]
+
+notion_keys = [
+    'Part Number/title/0/plain_text',         # Part Number
+    'Current Quantity/number',              # Quantity
+    'Description/rich_text/0/plain_text'    # Description
+]
 
 
 def main(args):
@@ -72,18 +76,16 @@ def parse_altium_bom(fh):
         raise ValueError('BOM did not contain enough data / the data was invalid')
     
     header_col_map = []
-    for header in required_bom_fields.keys():
+    for header in required_bom_fields:
         # Validate that all headers are in the provided BOM
         if header not in headers:
             raise ValueError(f'"{header}" was not found as a header in the BOM')
         # Create a mapping of header name to column index
         header_col_map.append(headers.index(header))
-    
-    for header in optional_bom_fields.keys():
-        if header not in headers:
-            # Fields are not required, so ignore them if unavailable
-            continue
-        header_col_map.append(headers.index(header))
+
+    # Not pythonic, but faster
+    for header in required_bom_fields:
+        header_col_map.append(-1 if header not in headers else headers.index(header))
         
     bom = []
     for row in bom_csv:
@@ -102,16 +104,8 @@ def check_inventory(bom, search, decrement):
     if not search:
         return
     
-    client = notion_client.Client(auth=os.environ['NOTION_TOKEN'])
-    inventory_raw = client.databases.query(os.environ['NOTION_DB_ID'])
-    #TODO inventory caching
-    inventory = []
-    for item in inventory_raw:
-        properties = item['properties']
-        # Equivalent to a blank Project property field
-        if properties['📽️ Projects']['id'] == 'fdLi':
-            pass
-        #TODO finish this
+    inv = inventory.list_db()
+    #TODO finish
 
 def check_jlc(bom, assembly):
     if not assembly:
