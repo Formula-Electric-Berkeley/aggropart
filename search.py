@@ -22,13 +22,10 @@ TODO add description
 import argparse
 import csv
 import os
-import json
 import sys
 
-import dotenv
-import notion_client
-
 import inventory
+
 
 required_bom_fields = [
     'Comment',
@@ -43,12 +40,6 @@ optional_bom_fields = [
     'Designator',           # For manual review only
     # 'Revision Status',    #TODO doesn't work?
     'JLCPCB Part Type'      # Only matters for JLC price esimation
-]
-
-notion_keys = [
-    'Part Number/title/0/plain_text',         # Part Number
-    'Current Quantity/number',              # Quantity
-    'Description/rich_text/0/plain_text'    # Description
 ]
 
 
@@ -138,6 +129,5 @@ def _parse_args():
     return parser.parse_args()
 
 if __name__ == "__main__":
-    dotenv.load_dotenv()
     args = _parse_args()
     sys.exit(main(args))

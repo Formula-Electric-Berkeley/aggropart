@@ -18,6 +18,7 @@ _db_mappings = {
 }
 
 _db_inst = None
+_client_inst = None
 dotenv.load_dotenv()
 
 
@@ -27,9 +28,12 @@ def _item_is_valid(item):
     return item['properties']['📽️ Projects']['id'] == 'fdLi'
 
 
-def create_client():
+def create_client(force_refresh=False):
     """Create a Notion API client using the environment's NOTION_TOKEN."""
-    return notion_client.Client(auth=os.environ['NOTION_TOKEN'])
+    global _client_inst
+    if _client_inst is None or force_refresh:
+        _client_inst = notion_client.Client(auth=os.environ['NOTION_TOKEN'])
+    return _client_inst
 
 
 def get_db(client=create_client(), id=os.environ['NOTION_DB_ID'], force_refresh=False):
@@ -59,9 +63,16 @@ def search_db(query, db=get_db()):
     raise NotImplementedError()
 
 
-def update_db(query, quantity, db=get_db()):
+def update_db(query, quantity, mode, db=get_db()):
     """Update the quantity of one database item by the quantity specified."""
-    #TODO implement (will also require changing permissions on web mgmt ui)
+    #TODO implement
+    raise NotImplementedError()
+
+
+def insert_db(query, quantity, db=get_db()):
+    """Update the quantity of one database item by the quantity specified."""
+    #TODO implement
+    #TODO validate EECS box number - another request to notion to get 
     raise NotImplementedError()
 
 
@@ -86,13 +97,23 @@ def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--token', '-t', help='Notion authentication token; required if not specified in .env')
     parser.add_argument('--dbid', '-d', help='Notion database ID; required if not specified in .env')
+
     op_subparser = parser.add_subparsers(dest='operation', required=True, help='type of desired operation')
     op_subparser.add_parser('list', description='List all items in inventory.')
     search_parser = op_subparser.add_parser('search', description='Search for an item in inventory.')
     search_parser.add_argument('query', help='query to search for in inventory')
+    
     update_parser = op_subparser.add_parser('update', description='Update the quantity of one item currently in inventory.')
     update_parser.add_argument('query', help='query to identify part to be updated')
-    update_parser.add_argument('quantity', help='**change** in quantity desired')
+    update_parser.add_argument('quantity', help='relative or absolute quantity desired')
+    update_parser.add_argument('mode', choices=['relative', 'absolute'], 
+                               help='whether quantity specified is relative to current quantity or is the new absolute quantity')
+    
+    insert_parser = op_subparser.add_parser('insert', description='Insert a new item into inventory.')
+    insert_parser.add_argument('part_number', help='manufacturer part number of the new item')
+    insert_parser.add_argument('box', help='EECS box number new item will be inserted into')
+    insert_parser.add_argument('quantity', help='absolute quantity of new item')
+    insert_parser.add_argument('description', help='description of new item')
 
     args = parser.parse_args()
 
@@ -104,7 +125,9 @@ def _parse_args():
     elif args.operation == 'search':
         return search_db(args.query)
     elif args.operation == 'update':
-        return update_db(args.query, args.quantity)
+        return update_db(args.query, args.quantity, args.mode)
+    elif args.operation == 'insert':
+        return insert_db(args.part_number, args.box, args.quantity, args.description)
     else:
         raise ValueError(f'"{args.operation}" was not recognized as a valid operation')
 
