@@ -13,12 +13,18 @@ import notion_client
 
 
 _db_mappings = {
-    'Part Number': 'properties/Part Number/title/0/plain_text',
-    'Quantity': 'properties/Current Quantity/number',
-    'Description': 'properties/Description/rich_text/0/plain_text',
-    'URL': 'url'
+    'Part Number': '["properties"]["Part Number"]["title"][0]["plain_text"]',
+    'Quantity': '["properties"]["Current Quantity"]["number"]',
+    'Description': '["properties"]["Description"]["rich_text"][0]["plain_text"]',
+    'Box': '["properties"]["Box"]["relation"][0]["id"]',
+    'URL': '["url"]'
 }
 
+_field_remappings = {
+    'Box': 'get_page(id)'
+}
+_remap_cache = {}
+_db_cache = {}
 _db_inst = None
 _client_inst = None
 dotenv.load_dotenv()
@@ -37,29 +43,49 @@ def create_client(force_refresh=False):
         _client_inst = notion_client.Client(auth=os.environ['NOTION_TOKEN'])
     return _client_inst
 
-
-def get_db(client=create_client(), id=os.environ['NOTION_DB_ID'], force_refresh=False, silent=False):
-    """Get the specified database content by querying the Notion API."""
-    global _db_inst
-
-    if _db_inst is None and os.path.exists('inventory.json'):
+def get_page(id, client=create_client(), force_refresh=False, silent=False):
+    pagecache_filepath = 'pages.'
+    if id not in _db_cache and os.path.exists(pagecache_filepath):
         if not silent:
             print("Using cached Notion database")
-        with open('inventory.json', 'r') as fp:
-            _db_inst = json.load(fp)
+        with open(pagecache_filepath, 'r') as fp:
+            _db_cache[id] = json.load(fp)
 
-    if _db_inst is None or force_refresh:
-        query = client.databases.query(id)
-        _db_inst = query['results']
-        while query['has_more'] == True:
-            if not silent:
-                print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
-            query = client.databases.query(id, start_cursor=query['next_cursor'], page_size=100)
-            _db_inst.extend(query['results'])
-        with open('inventory.json', 'w') as fp:
-            json.dump(_db_inst, fp, indent=4)
+    if id not in _db_cache or force_refresh:
+        query = client.databases.query(id, page_size=1)
+        _db_cache[id] = query['results']
+        # while query['has_more'] == True:
+        #     if not silent:
+        #         print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+        #     query = client.databases.query(id, start_cursor=query['next_cursor'], page_size=100)
+        #     _db_cache[id].extend(query['results'])
+        # with open(db_filepath, 'w') as fp:
+        #     json.dump(_db_cache[id], fp, indent=4)
     
-    return _db_inst
+    return _db_cache[id]
+
+def get_db(id=os.environ['NOTION_DB_ID'], client=create_client(), force_refresh=False, silent=False):
+    """Get the specified database content by querying the Notion API."""
+    db_filepath = f'cache/db_{id}.json'
+    if id not in _db_cache and os.path.exists(db_filepath):
+        if not silent:
+            print("Using cached Notion database")
+        with open(db_filepath, 'r') as fp:
+            _db_cache[id] = json.load(fp)
+
+    if id not in _db_cache or force_refresh:
+        os.makedirs(db_filepath.split('/')[:-1])
+        query = client.databases.query(id, page_size=1)
+        _db_cache[id] = query['results']
+        # while query['has_more'] == True:
+        #     if not silent:
+        #         print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+        #     query = client.databases.query(id, start_cursor=query['next_cursor'], page_size=100)
+        #     _db_cache[id].extend(query['results'])
+        # with open(db_filepath, 'w') as fp:
+        #     json.dump(_db_cache[id], fp, indent=4)
+    
+    return _db_cache[id]
 
 
 def list_db(db=get_db()):
@@ -67,9 +93,11 @@ def list_db(db=get_db()):
     inventory = []
     for item in db:
         if _item_is_valid(item):
-            inv_item = {k: _get_inv_field(item, v) for k, v in _db_mappings.items()}
+            inv_item = {k: _filter_inv_item(item, query) for k, query in _db_mappings.items()}
             if None not in inv_item.values():
                 inventory.append(inv_item)
+    print(inventory)
+    input()
     return inventory
 
 
@@ -92,18 +120,10 @@ def insert_db(query, quantity, db=get_db()):
     raise NotImplementedError()
 
 
-def _get_inv_field(db, query):
-    """#TODO document this"""
+def _filter_inv_item(db, query):
     try:
-        keys = query.split('/')
-        curr = db[keys.pop(0)]
-        while len(keys) > 0:
-            k = keys.pop(0)
-            if k.isnumeric():
-                k = int(k)
-            curr = curr[k]
-        return curr
-    except TypeError:
+        return eval(f'db{query}')
+    except KeyError:
         return ""
     except IndexError:
         return ""
