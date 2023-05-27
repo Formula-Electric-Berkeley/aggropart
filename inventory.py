@@ -4,6 +4,7 @@ TODO add description
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -12,9 +13,10 @@ import notion_client
 
 
 _db_mappings = {
-    'Part Number': 'Part Number/title/0/plain_text',
-    'Quantity': 'Current Quantity/number',
-    'Description': 'Description/rich_text/0/plain_text'
+    'Part Number': 'properties/Part Number/title/0/plain_text',
+    'Quantity': 'properties/Current Quantity/number',
+    'Description': 'properties/Description/rich_text/0/plain_text',
+    'URL': 'url'
 }
 
 _db_inst = None
@@ -36,24 +38,38 @@ def create_client(force_refresh=False):
     return _client_inst
 
 
-def get_db(client=create_client(), id=os.environ['NOTION_DB_ID'], force_refresh=False):
+def get_db(client=create_client(), id=os.environ['NOTION_DB_ID'], force_refresh=False, silent=False):
     """Get the specified database content by querying the Notion API."""
     global _db_inst
+
+    if _db_inst is None and os.path.exists('inventory.json'):
+        if not silent:
+            print("Using cached Notion database")
+        with open('inventory.json', 'r') as fp:
+            _db_inst = json.load(fp)
+
     if _db_inst is None or force_refresh:
-        _db_inst = client.databases.query(id)['results']
+        query = client.databases.query(id)
+        _db_inst = query['results']
+        while query['has_more'] == True:
+            if not silent:
+                print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+            query = client.databases.query(id, start_cursor=query['next_cursor'], page_size=100)
+            _db_inst.extend(query['results'])
+        with open('inventory.json', 'w') as fp:
+            json.dump(_db_inst, fp, indent=4)
+    
     return _db_inst
 
 
 def list_db(db=get_db()):
     """List all entries in the Notion database."""
-    #TODO inventory caching
     inventory = []
     for item in db:
         if _item_is_valid(item):
-            inv_item = {k: _get_inv_field(item['properties'], v) for k, v in _db_mappings.items()}
-            if None not in inv_item:
+            inv_item = {k: _get_inv_field(item, v) for k, v in _db_mappings.items()}
+            if None not in inv_item.values():
                 inventory.append(inv_item)
-                #TODO make this CSV instead of JSON
     return inventory
 
 
@@ -88,9 +104,9 @@ def _get_inv_field(db, query):
             curr = curr[k]
         return curr
     except TypeError:
-        return None
+        return ""
     except IndexError:
-        return None
+        return ""
 
 
 def _parse_args():
