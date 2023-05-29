@@ -25,11 +25,11 @@ import csv
 import json
 import os
 import sys
-import time
 
-from collections import namedtuple
-
+import common
 import inventory
+
+from distributors import jlcpcb, digikey, mouser
 
 
 required_bom_fields = [
@@ -114,6 +114,7 @@ def parse_altium_bom(fh):
             if attribute.isnumeric():
                 attribute = int(attribute)
             bom_item[k] = attribute
+    #TODO remove this array slice after testing
     return bom[:5]
 
 
@@ -122,7 +123,7 @@ def check_inventory(bom, search, decrement):
     if not search:
         return
     
-    inv = inventory.list_db()
+    inv = inventory.list_db(inventory.get_db())
     print(f'Found {len(inv)} inventory item entries')
     found_items = []
     for bom_idx, bom_item in enumerate(bom[:]):
@@ -132,73 +133,65 @@ def check_inventory(bom, search, decrement):
                     (inv_item['Quantity'] >= bom_item['Quantity']):
                 matches.append(Match(bom_item, inv_item, inv_idx))
 
-        proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
+        _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
 
-    inv_out_fn = 'out/from_inventory.json'
-    if os.path.exists(inv_out_fn):
-        resp = wait_yn('WARNING: Output path already exists. Overwrite?')
-        if not resp:
-            raise FileExistsError('User did not override existing file')
-    with open(inv_out_fn, 'w') as fp:
-        json.dump([match.inv_item for match in found_items], fp, indent=4)
-    print(len(inv))
+    print(f'Using {len(found_items)} (BOM line) items already in inventory')
+    _write_source_json('out/from_inventory.json', [match.inv_item for match in found_items])
 
 
-def proc_matches(bom, inv, bom_item, bom_idx, found_items, matches):
+def _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches):
     if len(matches) == 1:
         match = matches[0]
         print('====================')
         print(f'Matched BOM part ({bom_idx}/{len(bom)})')
-        print(json.dumps(match.bom_item, indent=4))
+        common.pprint(match.bom_item)
         print(f'with inventory part ({match.inv_idx}/{len(inv)})')
-        print(json.dumps(match.inv_item, indent=4))
+        common.pprint(match.inv_item)
         print('====================')
-        resp = wait_yn('Is this correct?')
+        resp = common.wait_yn('Is this correct?')
         if resp:
             found_items.append(match.copy())
             found_items[-1].inv_item['Quantity'] = 1
             _decr_from_inv(inv, match.inv_item, match.inv_idx)
         else:
-            manual_search = wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.', ['*'])
-            if len(manual_search) != 0:
-                matches = _get_matching_inv(inv, manual_search, bom_item)
-                proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
+            _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
     elif len(matches) == 0:
         print('====================')
         print(f'No inventory matches found for ({bom_idx}/{len(bom)})')
-        print(json.dumps(bom_item, indent=4))
+        common.pprint(bom_item)
         print('====================')
-        manual_search = wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.', ['*'])
-        if len(manual_search) != 0:
-            matches = _get_matching_inv(inv, manual_search, bom_item)
-            proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
+        _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
     else:
         print('====================')
         print(f'Found {len(matches)} matching inventory parts for BOM part ({bom_idx}/{len(bom)})')
-        print(json.dumps(matches[0].bom_item, indent=4))
+        common.pprint(matches[0].bom_item)
         print('Matching inventory parts')
         for match_idx, match in enumerate(matches):
             print(f'{match_idx}: (inventory item #{match.inv_idx}/{len(inv)}): {json.dumps(match.inv_item, indent=4)}')
         print('====================')
-        sel_idx = wait_resp('Enter the index of the chosen inventory item (-1 to skip/manual search)', list(range(len(matches))) + [-1])
+        sel_idx = common.wait_resp('Enter the index of the chosen inventory item (-1 to skip/manual search)', list(range(len(matches))) + [-1])
         sel_idx = int(sel_idx)
         if sel_idx == -1:
-            manual_search = wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.', ['*'])
-            if len(manual_search) != 0:
-                matches = _get_matching_inv(inv, manual_search, bom_item)
-                proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
+            _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
         else:
             found_items.append(matches[sel_idx].copy())
             found_items[-1].inv_item['Quantity'] = 1
             _decr_from_inv(inv, matches[sel_idx].inv_item, matches[sel_idx].inv_idx)
 
 
+def _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches):
+    manual_search = common.wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.', ['*'])
+    if len(manual_search) != 0:
+        matches = _get_matching_inv(inv, manual_search, bom_item)
+        _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
+
+
 def _decr_from_inv(inv, inv_item, inv_item_idx):
     inv[inv_item_idx]["Quantity"] -= 1
-    #TODO page qty update logic
+    #TODO page qty update logic (notion-side)
     if inv[inv_item_idx]["Quantity"] <= 0:
         inv.remove(inv_item)
-        #TODO page delete logic
+        #TODO page delete logic (notion-side)
 
 
 def _has_matching_properties(bom_item, inv_item):
@@ -227,36 +220,56 @@ def _get_matching_inv(inv, to_match, bom_item):
 def check_jlc(bom, assembly):
     if not assembly:
         return
+    
+    jlc_items = []
+    for bom_item in bom[:]:
+        jlc_pn = bom_item['JLCPCB Part Number']
+        if len(jlc_pn) == 0:
+            #TODO check JLC website for parts matching description/fields if not present
+            print('====================')
+            print('No JLCPCB Part Number found for part:')
+            common.pprint(bom_item)
+            _jlc_manual_search(bom, bom_item, jlc_items)
+            print('====================')
+        else:
+            stock = jlcpcb.get_item(jlc_pn)['Stock']
+            if stock < bom_item['Quantity']:
+                print(f'JLCPCB does not have enough quantity in stock for part (has {stock}, needs {bom_item["Quantity"]}):')
+                common.pprint(bom_item)
+                _jlc_manual_search(bom, bom_item, jlc_items)
+                print('====================')
+            else:
+                jlc_items.append(bom_item)
+                bom.remove(bom_item)
+
+    print(f'JLCPCB assembly service providing {len(jlc_items)} BOM line items.')
+    _write_source_json('out/from_jlcpcb.json', jlc_items)
+
+
+def _jlc_manual_search(bom, bom_item, jlc_items):
+    manual_search = common.wait_resp('Enter a replacement JLCPCB part number, or leave blank to skip.', ['*'])
+    if len(manual_search) != 0:
+        common.pprint(jlcpcb.get_item(manual_search))
+        resp = common.wait_yn('Is this correct?')
+        if resp:
+            bom_item['JLCPCB Part Number'] = manual_search
+            jlc_items.append(bom_item)
+            bom.remove(bom_item)
+        else:
+            _jlc_manual_search(bom, bom_item, jlc_items)
 
 
 def check_digikey_mouser(bom):
     pass
 
 
-def wait_resp(prompt, responses):
-    """Wait for the user to enter one of a specific set of responses to a given prompt."""
-    for idx in range(len(responses)):
-        # Ensure all responses are in string format
-        responses[idx] = str(responses[idx])
-    wildcard = "*" in responses
-    while True:
-        resp = input(f'{prompt} {responses}: ')
-        if resp in responses or wildcard:
-            return resp
-        else:
-            print(f'Please answer from {responses}.')
-
-
-def wait_yn(prompt):
-    """Wait for the user to enter y or n to a given prompt."""
-    while True:
-        resp = input(f'{prompt} [y/n]: ')
-        if resp == 'n':
-            return False
-        elif resp == 'y':
-            return True
-        else:
-            print('Please answer [y/n].')
+def _write_source_json(fn, data):
+    if os.path.exists(fn):
+        resp = common.wait_yn('WARNING: Output path already exists. Overwrite?')
+        if not resp:
+            raise FileExistsError('User did not override existing file')
+    with open(fn, 'w') as fp:
+        json.dump(data, fp, indent=4)
 
 
 def _parse_args():
@@ -280,6 +293,7 @@ def _parse_args():
                         default=False,
                         help='validate that the BOM contains the right data ONLY')
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = _parse_args()
