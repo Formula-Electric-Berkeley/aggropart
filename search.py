@@ -26,10 +26,14 @@ import json
 import os
 import sys
 
+import dotenv
 import common
 import inventory
 
-from distributors import jlcpcb, digikey, mouser
+from distributors import jlcpcb, mouser
+
+import digikey
+from digikey.v3.productinformation import KeywordSearchRequest
 
 
 required_bom_fields = [
@@ -48,6 +52,9 @@ optional_bom_fields = [
 ]
 
 max_matches = 20
+
+
+dotenv.load_dotenv()
 
 
 class Match:
@@ -75,9 +82,10 @@ def main(args):
     
     with open(args.bom, 'r') as bom_fh:
         bom = parse_altium_bom(bom_fh)
-        check_inventory(bom, args.search_inventory, args.decrement_inventory)
-        check_jlc(bom, args.assembly)
-        check_digikey_mouser(bom)
+        # check_inventory(bom, args.search_inventory, args.decrement_inventory)
+        # check_jlc(bom, args.assembly)
+        check_digikey(bom)
+        check_mouser(bom)
 
 
 def parse_altium_bom(fh):
@@ -234,6 +242,7 @@ def check_jlc(bom, assembly):
         else:
             stock = jlcpcb.get_item(jlc_pn)['Stock']
             if stock < bom_item['Quantity']:
+                print('====================')
                 print(f'JLCPCB does not have enough quantity in stock for part (has {stock}, needs {bom_item["Quantity"]}):')
                 common.pprint(bom_item)
                 _jlc_manual_search(bom, bom_item, jlc_items)
@@ -259,7 +268,38 @@ def _jlc_manual_search(bom, bom_item, jlc_items):
             _jlc_manual_search(bom, bom_item, jlc_items)
 
 
-def check_digikey_mouser(bom):
+def check_digikey(bom):
+    #TODO finish this function
+    dk_items = []
+    for bom_item in bom[:]:
+        if 'Digi-Key Part Number' in bom_item and len(bom_item['Digi-Key Part Number']) != 0:
+            dk_item = digikey.product_details(bom_item['Digi-Key Part Number'])
+            if dk_item.quantity_available >= bom_item['Quantity']:
+                _print_digikey_item(dk_item)
+                resp = common.wait_yn('Is this correct?')
+                if resp:
+                    bom.remove(bom_item)
+                    dk_items.append(bom_item)
+                else:
+                    #manual search, has enough
+                    pass
+            else:
+                #manual search, not enough in stock
+                pass
+        else:
+            #manual search, no dk-pn
+            pass
+    
+    print(f'Purchasing {len(dk_items)} BOM line items from DigiKey.')
+    _write_source_json('out/from_digikey.json', dk_items)
+
+
+def _print_digikey_item(item):
+    common.pprint({
+        'Quantity'
+    })
+
+def check_mouser(bom):
     pass
 
 

@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+
 class Cache:
     def __init__(self, filepath, timeout_sec):
         self.filepath = filepath

@@ -14,8 +14,8 @@ import notion_client
 
 import common
 
+from cache import Cache
 
-cache_timeout_sec = 300
 
 db_mappings = {
     'Part Number': 'db["properties"]["Part Number"]["title"][0]["plain_text"]',
@@ -25,9 +25,8 @@ db_mappings = {
     'URL': 'db["url"]'
 }
 
-_db_cache = {}
-_db_lastedited_cache = {}
-_page_cache = {}
+_db_cache = Cache(f'cache/db_{id}.json', timeout_sec=300)
+_page_cache = Cache(f'cache/page_{id}.json', timeout_sec=300)
 _client_inst = None
 dotenv.load_dotenv()
 
@@ -47,50 +46,35 @@ def create_client(force_refresh=False):
 
 def get_page(id, client=create_client(), force_refresh=False, silent=False):
     """Get the specified page content by querying the Notion API."""
-    page_filepath = f'cache/page_{id}.json'
-    if not force_refresh and id not in _page_cache and os.path.exists(page_filepath):
-        if not silent:
-            print(f"Using cached Notion page for ID: {id}")
-        with open(page_filepath, 'r') as fp:
-            _page_cache[id] = json.load(fp)
+    value, used_cached = _page_cache.get(id, lambda cache, key: _update_page_cache(cache, key, client), force_refresh)
+    if used_cached and not silent:
+        print(f"Using cached Notion database for ID: {id}")
+    return value
 
-    if id not in _page_cache or force_refresh:
-        os.makedirs(page_filepath[:page_filepath.rindex('/')], exist_ok=True)
-        query = client.pages.retrieve(id)
-        _page_cache[id] = query
-        with open(page_filepath, 'w') as fp:
-            json.dump(_page_cache[id], fp, indent=4)
 
-    return _page_cache[id]
-
+def _update_page_cache(cache, key, client):
+    cache[key] = client.pages.retrieve(key)
 
 def get_db(id=os.environ['NOTION_DB_ID'], client=create_client(), force_refresh=False, silent=False):
     """Get the specified database content by querying the Notion API."""
-    db_filepath = f'cache/db_{id}.json'
-    refresh = force_refresh or _cache_expired(db_filepath)
-    if not refresh and id not in _db_cache and os.path.exists(db_filepath):
-        if not silent:
-            print(f"Using cached Notion database for ID: {id}")
-        with open(db_filepath, 'r') as fp:
-            _db_cache[id] = json.load(fp)
+    value, used_cached = _db_cache.get(id, lambda cache, key: _update_db_cache(cache, key, client, silent), force_refresh)
+    if used_cached and not silent:
+        print(f"Using cached Notion database for ID: {id}")
+    return value
 
-    if id not in _db_cache or refresh:
-        os.makedirs(db_filepath[:db_filepath.rindex('/')], exist_ok=True)
-        #TODO change page size to 100 after testing
+
+def _update_db_cache(cache, key, client, silent):
+    """TODO document"""
+    if not silent:
+        print(f"Executing initial Notion DB query", flush=True)
+    query = client.databases.query(key, page_size=100)
+    cache[key] = query['results']
+    while query['has_more'] == True:
         if not silent:
-            print(f"Executing initial Notion DB query", flush=True)
-        query = client.databases.query(id, page_size=1)
-        _db_cache[id] = query['results']
-        # while query['has_more'] == True:
-        #     if not silent:
-        #         print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
-        #     query = client.databases.query(id, start_cursor=query['next_cursor'], page_size=100)
-        #     _db_cache[id].extend(query['results'])
-        with open(db_filepath, 'w') as fp:
-            json.dump(_db_cache[id], fp, indent=4)
+            print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+        query = client.databases.query(key, start_cursor=query['next_cursor'], page_size=100)
+        cache[key].extend(query['results'])
     
-    return _db_cache[id]
-
 
 def list_db(db):
     """List all entries in the Notion database."""
@@ -128,9 +112,6 @@ def _filter_inv_item(db, query):
     except (KeyError, IndexError):
         return ""
 
-
-def _cache_expired(filepath):
-    return (time.time() - os.path.getmtime(filepath)) > cache_timeout_sec
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
