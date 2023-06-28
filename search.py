@@ -3,38 +3,22 @@
 TODO add description
 """
 
-# input Altium BOM
-# validates all rows have Mouser, Digikey, JLC part numbers (or warn to ignore)
-# Do inventory search (Notion) to see which parts are already available (& remove)
-#  if None or multiple, ask user which is correct
-#  if no box, warn & provide link for user - option for manual override
-#  Subtract quantities from inventory if needed (& arg is passed)
-# If assembly flag passed, (and API key provided)
-#  search JLC and subtract all that are present
-#  if a part is OOS, ask for alt part num or to buy externally
-#  warn for extended parts (?)
-#  tally part cost, parts to order from JLC
-# For all remaining parts,
-#  provide digikey and mouser part costs (for diff groupings)
-#  user selects each src & qty (unless part only exists on one)
-#  create importable BOM for Mouser and Digikey separately at end
-
 import argparse
 import copy
 import csv
 import json
+import logging
 import os
 import sys
 
-import dotenv
 import common
+import digikey
+import dotenv
 import inventory
 
+from digikey.v3.api import ApiException as DigikeyApiException
+
 from distributors import jlcpcb, mouser
-
-import digikey
-from digikey.v3.productinformation import KeywordSearchRequest
-
 
 required_bom_fields = [
     'Comment',
@@ -45,10 +29,10 @@ required_bom_fields = [
 ]
 
 optional_bom_fields = [
-    'Description',          # For manual review only
-    'Designator',           # For manual review only
+    'Description',  # For manual review only
+    'Designator',  # For manual review only
     # 'Revision Status',    #TODO doesn't work?
-    'JLCPCB Part Type'      # Only matters for JLC price esimation
+    'JLCPCB Part Type'  # Only matters for JLC price esimation
 ]
 
 max_matches = 20
@@ -65,30 +49,32 @@ class Match:
 
     def copy(self):
         return Match(
-            copy.deepcopy(self.bom_item), 
-            copy.deepcopy(self.inv_item), 
+            copy.deepcopy(self.bom_item),
+            copy.deepcopy(self.inv_item),
             self.inv_idx
         )
 
 
 def main(args):
+    """TODO document this"""
     if not os.path.exists(args.bom):
         raise FileNotFoundError(args.bom)
-    
+
     if not args.bom.lower().endswith('.csv'):
         raise ValueError(f'Filepath "{args.bom}" does not end in .csv')
-    
+
     os.makedirs('out/', exist_ok=True)
-    
+
     with open(args.bom, 'r') as bom_fh:
         bom = parse_altium_bom(bom_fh)
+        #TODO uncomment this
         # check_inventory(bom, args.search_inventory, args.decrement_inventory)
         # check_jlc(bom, args.assembly)
         check_digikey(bom)
         check_mouser(bom)
 
 
-def parse_altium_bom(fh):
+def parse_altium_bom(fh) -> list[dict[str]]:
     """Read and parse a BOM exported from Altium given a file handle."""
     bom_csv = csv.reader(fh)
     try:
@@ -96,7 +82,7 @@ def parse_altium_bom(fh):
     except StopIteration:
         # Check that the header was read - i.e. the file is not already empty
         raise ValueError('BOM did not contain enough data / the data was invalid')
-    
+
     item_template = {}
     for header in required_bom_fields:
         # Validate that all headers are in the provided BOM
@@ -108,7 +94,7 @@ def parse_altium_bom(fh):
     # Not pythonic, but faster
     for header in optional_bom_fields:
         item_template[header] = None if header in headers else -1
-        
+
     bom = []
     for row in bom_csv:
         # Skip rows that are blank/empty
@@ -122,15 +108,16 @@ def parse_altium_bom(fh):
             if attribute.isnumeric():
                 attribute = int(attribute)
             bom_item[k] = attribute
-    #TODO remove this array slice after testing
+    # TODO remove this array slice after testing
     return bom[:5]
 
 
-def check_inventory(bom, search, decrement):
-    #TODO decrement from inventory
+def check_inventory(bom: list[dict[str]], search: bool, decrement: bool) -> None:
+    """TODO document this"""
+    # TODO decrement from inventory
     if not search:
         return
-    
+
     inv = inventory.list_db(inventory.get_db())
     print(f'Found {len(inv)} inventory item entries')
     found_items = []
@@ -147,15 +134,16 @@ def check_inventory(bom, search, decrement):
     _write_source_json('out/from_inventory.json', [match.inv_item for match in found_items])
 
 
-def _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches):
+def _proc_matches(bom: list[dict[str]], inv: list[dict], bom_item: dict[str], bom_idx: int,
+                  found_items: list, matches: list) -> None:
     if len(matches) == 1:
         match = matches[0]
-        print('====================')
-        print(f'Matched BOM part ({bom_idx}/{len(bom)})')
+        common.print_line()
+        print(f'Matched BOM part ({bom_idx + 1}/{len(bom)})')
         common.pprint(match.bom_item)
         print(f'with inventory part ({match.inv_idx}/{len(inv)})')
         common.pprint(match.inv_item)
-        print('====================')
+        common.print_line()
         resp = common.wait_yn('Is this correct?')
         if resp:
             found_items.append(match.copy())
@@ -164,20 +152,21 @@ def _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches):
         else:
             _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
     elif len(matches) == 0:
-        print('====================')
-        print(f'No inventory matches found for ({bom_idx}/{len(bom)})')
+        common.print_line()
+        print(f'No inventory matches found for ({bom_idx + 1}/{len(bom)})')
         common.pprint(bom_item)
-        print('====================')
+        common.print_line()
         _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
     else:
-        print('====================')
-        print(f'Found {len(matches)} matching inventory parts for BOM part ({bom_idx}/{len(bom)})')
+        common.print_line()
+        print(f'Found {len(matches)} matching inventory parts for BOM part ({bom_idx + 1}/{len(bom)})')
         common.pprint(matches[0].bom_item)
         print('Matching inventory parts')
         for match_idx, match in enumerate(matches):
             print(f'{match_idx}: (inventory item #{match.inv_idx}/{len(inv)}): {json.dumps(match.inv_item, indent=4)}')
-        print('====================')
-        sel_idx = common.wait_resp('Enter the index of the chosen inventory item (-1 to skip/manual search)', list(range(len(matches))) + [-1])
+        common.print_line()
+        sel_idx = common.wait_resp('Enter the index of the chosen inventory item (-1 to skip/manual search)',
+                                   list(range(len(matches))) + [-1])
         sel_idx = int(sel_idx)
         if sel_idx == -1:
             _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches)
@@ -187,22 +176,24 @@ def _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches):
             _decr_from_inv(inv, matches[sel_idx].inv_item, matches[sel_idx].inv_idx)
 
 
-def _inv_manual_search(bom, inv, bom_item, bom_idx, found_items, matches):
-    manual_search = common.wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.', ['*'])
+def _inv_manual_search(bom: list[dict[str]], inv: list[dict], bom_item: dict[str], bom_idx: int,
+                       found_items: list, matches: list) -> None:
+    manual_search = common.wait_resp('Enter a search term to look through inventory manually, or leave blank to skip.',
+                                     ['*'])
     if len(manual_search) != 0:
-        matches = _get_matching_inv(inv, manual_search, bom_item)
+        matches.extend(_get_matching_inv(inv, manual_search, bom_item))
         _proc_matches(bom, inv, bom_item, bom_idx, found_items, matches)
 
 
-def _decr_from_inv(inv, inv_item, inv_item_idx):
+def _decr_from_inv(inv: list[dict], inv_item: dict, inv_item_idx: int) -> None:
     inv[inv_item_idx]["Quantity"] -= 1
-    #TODO page qty update logic (notion-side)
+    # TODO page qty update logic (notion-side)
     if inv[inv_item_idx]["Quantity"] <= 0:
         inv.remove(inv_item)
-        #TODO page delete logic (notion-side)
+        # TODO page delete logic (notion-side)
 
 
-def _has_matching_properties(bom_item, inv_item):
+def _has_matching_properties(bom_item: dict[str], inv_item: dict) -> bool:
     for bom_attr_val in bom_item.values():
         for inv_attr_val in inv_item.values():
             if type(bom_attr_val) == str and type(inv_attr_val) == str and \
@@ -212,12 +203,12 @@ def _has_matching_properties(bom_item, inv_item):
     return False
 
 
-def _get_matching_inv(inv, to_match, bom_item):
+def _get_matching_inv(inv: list[dict], to_match: str, bom_item: dict[str]) -> list:
     matches = []
     for inv_idx, inv_item in enumerate(inv):
         for inv_attr_val in inv_item.values():
             if type(inv_attr_val) == str and len(inv_attr_val) != 0 and \
-                (to_match in inv_attr_val or inv_attr_val in to_match):
+                    (to_match in inv_attr_val or inv_attr_val in to_match):
                 matches.append(Match(bom_item, inv_item, inv_idx))
                 break
         if len(matches) >= max_matches:
@@ -225,28 +216,29 @@ def _get_matching_inv(inv, to_match, bom_item):
     return matches
 
 
-def check_jlc(bom, assembly):
+def check_jlc(bom: list[dict[str]], assembly: bool) -> None:
     if not assembly:
         return
-    
+
     jlc_items = []
     for bom_item in bom[:]:
         jlc_pn = bom_item['JLCPCB Part Number']
         if len(jlc_pn) == 0:
-            #TODO check JLC website for parts matching description/fields if not present
-            print('====================')
+            # TODO check JLC website for parts matching description/fields if not present
+            common.print_line()
             print('No JLCPCB Part Number found for part:')
             common.pprint(bom_item)
             _jlc_manual_search(bom, bom_item, jlc_items)
-            print('====================')
+            common.print_line()
         else:
             stock = jlcpcb.get_item(jlc_pn)['Stock']
             if stock < bom_item['Quantity']:
-                print('====================')
-                print(f'JLCPCB does not have enough quantity in stock for part (has {stock}, needs {bom_item["Quantity"]}):')
+                common.print_line()
+                print('JLCPCB does not have enough quantity in stock for part '
+                      f'(has {stock}, needs {bom_item["Quantity"]}):')
                 common.pprint(bom_item)
                 _jlc_manual_search(bom, bom_item, jlc_items)
-                print('====================')
+                common.print_line()
             else:
                 jlc_items.append(bom_item)
                 bom.remove(bom_item)
@@ -255,7 +247,7 @@ def check_jlc(bom, assembly):
     _write_source_json('out/from_jlcpcb.json', jlc_items)
 
 
-def _jlc_manual_search(bom, bom_item, jlc_items):
+def _jlc_manual_search(bom: list[dict[str]], bom_item: dict[str], jlc_items: list[dict[str]]) -> None:
     manual_search = common.wait_resp('Enter a replacement JLCPCB part number, or leave blank to skip.', ['*'])
     if len(manual_search) != 0:
         common.pprint(jlcpcb.get_item(manual_search))
@@ -268,42 +260,95 @@ def _jlc_manual_search(bom, bom_item, jlc_items):
             _jlc_manual_search(bom, bom_item, jlc_items)
 
 
-def check_digikey(bom):
-    #TODO finish this function
+def check_digikey(bom: list[dict[str]]) -> None:
+    """TODO document this"""
+    logging.getLogger('digikey').setLevel(logging.CRITICAL)
+
     dk_items = []
-    for bom_item in bom[:]:
-        if 'Digi-Key Part Number' in bom_item and len(bom_item['Digi-Key Part Number']) != 0:
-            dk_item = digikey.product_details(bom_item['Digi-Key Part Number'])
-            if dk_item.quantity_available >= bom_item['Quantity']:
-                _print_digikey_item(dk_item)
-                resp = common.wait_yn('Is this correct?')
-                if resp:
-                    bom.remove(bom_item)
-                    dk_items.append(bom_item)
-                else:
-                    #manual search, has enough
-                    pass
-            else:
-                #manual search, not enough in stock
-                pass
-        else:
-            #manual search, no dk-pn
-            pass
-    
+    for bom_idx, bom_item in enumerate(bom[:]):
+        _proc_dk_item(bom, bom_item, bom_idx, dk_items)
+    common.print_line()
+
     print(f'Purchasing {len(dk_items)} BOM line items from DigiKey.')
     _write_source_json('out/from_digikey.json', dk_items)
 
 
+def _proc_dk_item(bom, bom_item, bom_idx, dk_items, dk_pn=None):
+    """TODO document this"""
+    if not dk_pn:
+        if 'Digi-Key Part Number' in bom_item and len(bom_item['Digi-Key Part Number']) != 0:
+            dk_pn = bom_item['Digi-Key Part Number']
+        else:
+            # No Digikey part number in BOM
+            _digikey_manual_search(bom, bom_item, bom_idx, dk_items,
+                                   f'Digikey part number not found in BOM')
+
+    try:
+        dk_item = digikey.product_details(dk_pn)
+    except DigikeyApiException:
+        _digikey_manual_search(bom, bom_item, bom_idx, dk_items,
+                               f'Digikey did not have any parts matching {dk_pn}.')
+        return
+
+    if dk_item:
+        if dk_item.quantity_available >= bom_item['Quantity']:
+            common.print_line()
+            print(f'Matched BOM part ({bom_idx + 1}/{len(bom)})')
+            common.pprint(bom_item)
+            print('with Digikey part')
+            _print_digikey_item(dk_item)
+            resp = common.wait_yn('Is this correct?')
+            if resp:
+                bom.remove(bom_item)
+                dk_items.append(bom_item)
+            else:
+                # Voluntary
+                _digikey_manual_search(bom, bom_item, bom_idx, dk_items)
+        else:
+            # Not enough in stock
+            _digikey_manual_search(bom, bom_item, bom_idx, dk_items,
+                                   f'Digikey did not have enough of {dk_pn}. '
+                                   f'Has {dk_item.quantity_available}, needs {bom_item["Quantity"]}')
+    else:
+        # Part Number not found
+        _digikey_manual_search(bom, bom_item, bom_idx, dk_items,
+                               f'Digikey did not have any parts matching {dk_pn}.')
+
+
+def _digikey_manual_search(bom, bom_item, bom_idx, dk_items, message: str = None):
+    """TODO document this"""
+    common.print_line()
+    if message:
+        print(message)
+    common.pprint(bom_item)
+    manual_search = common.wait_resp('Enter a Digikey part number to lookup manually, or leave blank to skip.', ['*'])
+    if len(manual_search) != 0:
+        _proc_dk_item(bom, bom_item, bom_idx, dk_items, manual_search)
+
+
 def _print_digikey_item(item):
+    """TODO document this"""
     common.pprint({
-        'Quantity'
+        'Part Number': item.manufacturer_part_number,
+        'Description': item.product_description,
+        'Quantity Available': item.quantity_available,
+        'Minimum Order Quantity': item.minimum_order_quantity,
+        'Marketplace': item.marketplace,
+        'Non-stock': item.non_stock,
+        'Obsolete': item.obsolete,
+        'Product Status': item.product_status,
+        'Unit Price': item.unit_price,
+        'Datasheet URL': item.primary_datasheet,
+        'Digikey URL': item.product_url,
     })
+
 
 def check_mouser(bom):
     pass
 
 
 def _write_source_json(fn, data):
+    """TODO document this"""
     if os.path.exists(fn):
         resp = common.wait_yn('WARNING: Output path already exists. Overwrite?')
         if not resp:
@@ -316,18 +361,18 @@ def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bom', help='filepath of Bill of Materials exported from Altium')
     parser.add_argument('--search-inventory', '-s',
-                        action='store_true', 
+                        action='store_true',
                         default=True,
                         help='search the inventory for existing parts')
     parser.add_argument('--decrement-inventory', '-d',
                         action='store_true',
                         default=False,
                         help='decrement quantity of inventory items used in BOM')
-    parser.add_argument('--assembly', '-a', 
+    parser.add_argument('--assembly', '-a',
                         action='store_true',
                         default=False,
                         help='use JLCPCB assembly service and parts')
-    #TODO validate
+    # TODO validate
     parser.add_argument('--validate-only', '-v',
                         action='store_true',
                         default=False,
