@@ -1,8 +1,13 @@
+#!/usr/bin/env python3
+"""
+TODO add description
+"""
+
+import dotenv
 import PySimpleGUI as psg
 
 import bom
-import search
-
+import partsearcher
 
 bom_file = None
 
@@ -21,7 +26,9 @@ def _make_table(headings, key):
         values=[],
         col_widths=[len(item) for item in headings],
         auto_size_columns=False,
-        key=key
+        key=key,
+        hide_vertical_scroll=False,
+        vertical_scroll_only=False
     )
 
 
@@ -30,7 +37,7 @@ def _make_window():
         psg.Frame('Remaining BOM', [
             [psg.FileBrowse('Open BOM CSV', enable_events=True, key='-BOM-OPEN-')],
             [rbom_table]
-        ])
+        ], key='-RBOM-FRAME-')
     ]
 
     ssel_layout = [
@@ -42,12 +49,12 @@ def _make_window():
                 psg.Radio(text='Query', group_id='search', key='-SELECT-SEARCH-QUERY-', enable_events=True),
                 search_query_input,
                 psg.Text(text='Search from: '),
-                psg.Combo(values=['Inventory', 'Digikey', 'Mouser', 'JLCPCB'], default_value='Inventory',
-                          key='-SEARCH-SRC-'),
+                psg.OptionMenu(values=['Inventory', 'Digikey', 'Mouser', 'JLCPCB'], default_value='Inventory',
+                               key='-SEARCH-SRC-'),
                 psg.Button(button_text='Search', key='-SEARCH-EXEC-')
             ],
             [ssel_table]
-        ])
+        ], key='-SSEL-FRAME-')
     ]
 
     inv_tab = psg.Tab('Inventory', [[inv_table]])
@@ -57,16 +64,38 @@ def _make_window():
 
     pbom_layout = [
         psg.Frame('Processed BOM', [
-            [psg.Button(button_text='Save BOM')],
+            [
+                # TODO make these buttons do things
+                psg.Button(button_text='Export Current PBOM'),
+                psg.Button(button_text='Export All PBOMs'),
+                psg.Push(),
+                psg.Button(button_text='↓ Associate Item With Part ↓'),
+                psg.Button(button_text='↑ Remove Item From Part ↑'),
+            ],
             [psg.TabGroup([[inv_tab, dk_tab, mouser_tab, jlc_tab]])]
-        ])
+        ], key='-PBOM-FRAME-')
     ]
 
-    layout = [rbom_layout, ssel_layout, pbom_layout]
+    file_opts = ['Export Current PBOM', 'Export All PBOMs', 'Clear Inventory Cache', 'Clear All Tables']
+    help_opts = ['Instructions', 'Required BOM Fields', 'About aggropart']
+    # TODO make these buttons do things
+    menu = [psg.Menu([['File', file_opts], ['Help', help_opts]], key='-MENUBAR-', p=0)]
 
-    return psg.Window('aggropart', layout, finalize=True)
+    layout = [menu, rbom_layout, ssel_layout, pbom_layout]
+
+    return psg.Window('aggropart', layout, finalize=True, size=(800, 750))
+
+
+def _pack_frame(name):
+    window[name].Widget.pack_propagate(0)
+    window[name].Widget.config(
+        width=window.size[0], height=window.size[1] // 3
+    )
+
 
 if __name__ == "__main__":
+    dotenv.load_dotenv()
+
     rbom_table = _make_table(bom.altium_fields, '-RBOM-TABLE-')
     ssel_table = _make_table(bom.search_fields, '-SSEL-TABLE-')
     inv_table = _make_table(bom.inv_fields, '-INV-TABLE-')
@@ -78,6 +107,11 @@ if __name__ == "__main__":
                                    disabled=True, disabled_readonly_background_color='#9c9c9c')
 
     window = _make_window()
+    _pack_frame('-RBOM-FRAME-')
+    _pack_frame('-SSEL-FRAME-')
+    _pack_frame('-PBOM-FRAME-')
+
+    searcher = partsearcher.PartSearcher(rbom_table, ssel_table)
 
     while True:
         event, values = window.read()
@@ -96,4 +130,4 @@ if __name__ == "__main__":
         elif event == '-SELECT-SEARCH-PART-':
             search_query_input.update(disabled=True, value='')
         elif event == '-SEARCH-EXEC-':
-            search.execute(values['-SEARCH-SRC-'], values['-SEARCH-QUERY-'], rbom_table, ssel_table)
+            searcher.execute(values['-SEARCH-SRC-'], values['-SEARCH-QUERY-'])

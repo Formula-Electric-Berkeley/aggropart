@@ -3,3 +3,4 @@ digikey-api==1.0.0
 notion-client==2.0.0
 python-dotenv==1.0.0
 PySimpleGUI==4.60.5
+requests==2.31.0

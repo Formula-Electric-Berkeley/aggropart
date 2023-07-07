@@ -2,7 +2,6 @@ import json
 import os
 import time
 
-# TODO document class
 class Cache:
     def __init__(self, filepath_supplier, timeout_sec):
         self.filepath_supplier = filepath_supplier

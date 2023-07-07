@@ -10,22 +10,21 @@ import bs4
 # Fields to be parsed from each JLCPCB item
 # Format: (eval_format_string, default_value)
 item_fields = {
+    'JLCPCB Part Number': ('_item_metavals(parser)[2].text', ''),
+    'Mfg Part Number': ('_item_metavals(parser)[1].text', ''),
+    'Manufacturer': ('_item_metavals(parser)[0].text', ''),
     'Stock': ('int(parser.find("div", class_="smt-count-component")'
               '.find("div", class_="text-16").text[len("In Stock: "):])', 0),
-    'Manufacturer': ('_item_metavals(parser)[0].text', ''),
-    'Manufacturer Part Number': ('_item_metavals(parser)[1].text', ''),
     'Package': ('_item_metavals(parser)[3].text', ''),
     'Description': ('_item_metavals(parser)[4].text', ''),
 }
 
 
 def _item_metavals(parser: bs4.BeautifulSoup) -> bs4.ResultSet:
-    """TODO document this"""
     return parser.find_all("dd", {"data-v-293164dd": True})
 
 
 def get_item(part_number: str) -> dict[str]:
-    """TODO document this"""
     url = f'https://jlcpcb.com/partdetail/{part_number}'
     req = urllib.request.urlopen(url)
     resp = req.read()

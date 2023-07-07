@@ -19,7 +19,7 @@ import inventory
 from digikey.v3.api import ApiException as DigikeyApiException
 from digikey.v3.productinformation import KeywordSearchRequest
 
-from distributors import jlcpcb, mouser
+from distributors import jlcpcbw, mouserw
 
 required_bom_fields = [
     'Comment',
@@ -114,7 +114,6 @@ def parse_altium_bom(fh) -> list[dict[str]]:
 
 
 def check_inventory(bom: list[dict[str]], search: bool, decrement: bool) -> None:
-    """TODO document this"""
     # TODO decrement from inventory
     if not search:
         return
@@ -232,7 +231,7 @@ def check_jlc(bom: list[dict[str]], assembly: bool) -> None:
             _jlc_manual_search(bom, bom_item, jlc_items)
             common.print_line()
         else:
-            stock = jlcpcb.get_item(jlc_pn)['Stock']
+            stock = jlcpcbw.get_item(jlc_pn)['Stock']
             if stock < bom_item['Quantity']:
                 common.print_line()
                 print('JLCPCB does not have enough quantity in stock for part '
@@ -251,7 +250,7 @@ def check_jlc(bom: list[dict[str]], assembly: bool) -> None:
 def _jlc_manual_search(bom: list[dict[str]], bom_item: dict[str], jlc_items: list[dict[str]]) -> None:
     manual_search = common.wait_resp('Enter a replacement JLCPCB part number, or leave blank to skip.', ['*'])
     if len(manual_search) != 0:
-        common.pprint(jlcpcb.get_item(manual_search))
+        common.pprint(jlcpcbw.get_item(manual_search))
         resp = common.wait_yn('Is this correct?')
         if resp:
             bom_item['JLCPCB Part Number'] = manual_search

@@ -22,8 +22,9 @@ db_mappings = {
     'URL': 'db["url"]'
 }
 
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=10000)
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=10000)
+# TODO change timeouts back after testing
+_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=float('inf'))
+_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=float('inf'))
 _client_inst = None
 dotenv.load_dotenv()
 
@@ -105,7 +106,6 @@ def insert_db(attributes, quantity, db):
 
 
 def _filter_inv_item(db: dict, query: str):
-    """TODO document"""
     try:
         return eval(query)
     except (KeyError, IndexError):
@@ -161,7 +161,6 @@ def validate_args(args) -> str:
 
 
 def _checkset_env(key: str, arg: str, designator: str) -> None:
-    """TODO document"""
     if key not in os.environ or len(os.environ[key]) == 0:
         if not arg:
             raise ValueError(f'No {designator} was specified.')

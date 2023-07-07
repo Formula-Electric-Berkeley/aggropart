@@ -2,8 +2,9 @@ import csv
 import os
 
 import inventory
-from distributors import jlcpcb, digi_key
+from distributors import jlcpcbw, digikeyw, mouserw
 from digikey.v3.productinformation.models.product_details import ProductDetails
+
 
 required_fields = [
     'Comment',
@@ -23,14 +24,12 @@ optional_fields = [
 altium_fields = required_fields + optional_fields
 
 inv_fields = list(inventory.db_mappings.keys())
-base_dist_fields = [
-    'Part Number',
-    'Quantity',
-    'Description'
-]
-dk_fields = list(digi_key.format_item(ProductDetails()).keys())
-mouser_fields = base_dist_fields
-jlc_fields = base_dist_fields + list(jlcpcb.item_fields.keys())
+
+# Get these fields by passing placeholder/invalid items into
+# their respective formatter functions, then taking the keys only
+dk_fields = list(digikeyw.format_item(ProductDetails()).keys())
+mouser_fields = list(mouserw.format_item(mouserw.fake_response_item).keys())
+jlc_fields = list(jlcpcbw.item_fields.keys())
 _field_maxlen = len(max(inv_fields, dk_fields, mouser_fields, jlc_fields, key=lambda v: len(v)))
 search_fields = [f'Placeholder{i}' for i in range(_field_maxlen)]
 
