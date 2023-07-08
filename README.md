@@ -1,4 +1,4 @@
-# aggropart
+# aggropart <img src="images/logo.png" width="32px" height="32px">
 
 A utility program to automate the selection of 
 parts from an Altium BOM file.
