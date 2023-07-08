@@ -74,11 +74,16 @@ def read(fp):
             bom.append(bom_item)
             # Reorder CSV data into template format
             for k in bom_item.keys():
-                attribute = row[headers.index(k)]
-                if attribute.isnumeric():
-                    attribute = int(attribute)
-                bom_item[k] = attribute
+                try:
+                    attribute = row[headers.index(k)]
+                    if attribute.isnumeric():
+                        attribute = int(attribute)
+                    bom_item[k] = attribute
+                except ValueError:
+                    # Optional missing values get caught here
+                    bom_item[k] = -1
         return bom
+
 
 if __name__ == "__main__":
     raise NotImplementedError()

@@ -4,6 +4,7 @@ TODO add description
 """
 
 import argparse
+import glob
 import os
 import sys
 
@@ -22,9 +23,8 @@ db_mappings = {
     'URL': 'db["url"]'
 }
 
-# TODO change timeouts back after testing
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=float('inf'))
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=float('inf'))
+_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=21600)
+_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=21600)
 _client_inst = None
 dotenv.load_dotenv()
 
@@ -33,6 +33,14 @@ def _item_is_valid(item: dict) -> bool:
     """User customizable function to filter out unwanted inventory entries."""
     # Equivalent to a blank Project property field (EECS inventory)
     return item['properties']['📽️ Projects']['id'] == 'fdLi'
+
+
+def clear_caches():
+    """Clear the DB and page cache both internally and in the page storage."""
+    _db_cache.cache.clear()
+    _page_cache.cache.clear()
+    for f in glob.glob('cache/page_*') + glob.glob('cache/db_*'):
+        os.remove(f)
 
 
 def create_client(force_refresh: bool = False) -> NotionClient:

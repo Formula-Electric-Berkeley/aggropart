@@ -1,29 +1,39 @@
+import os
+
 import bom
+import gui
 import inventory
+import popups
 
 from distributors import digikeyw, mouserw, jlcpcbw
+
 
 class PartSearcher:
     def __init__(self, rbom_table, ssel_table):
         self.rbom_table = rbom_table
         self.ssel_table = ssel_table
+        self.last_src = None
 
     def execute(self, src, query):
+        self.last_src = src
         if src == 'Inventory':
+            if _check_missing_env('NOTION_TOKEN', src) or _check_missing_env('NOTION_DB_ID', src):
+                return
+            # This causes the GUI to freeze because it is slow
+            # But this is faster than using another thread
             self._search_inv(query)
         elif src == 'Digikey':
+            if _check_missing_env('DIGIKEY_CLIENT_ID', src) or \
+                    _check_missing_env('DIGIKEY_CLIENT_SECRET', src) or \
+                    _check_missing_env('DIGIKEY_STORAGE_PATH', src):
+                return
             self._search_dk(query)
         elif src == 'Mouser':
+            if _check_missing_env('MOUSER_PART_API_KEY', src):
+                return
             self._search_mouser(query)
         elif src == 'JLCPCB':
             self._search_jlc(query)
-
-    def _get_selected_rbom_row(self):
-        if len(self.rbom_table.SelectedRows) == 0:
-            return None
-        else:
-            sel_table_row = self.rbom_table.Values[self.rbom_table.SelectedRows[0]]
-            return {k: sel_table_row[i] for i, k in enumerate(bom.altium_fields)}
 
     def _update_gui(self, values, headings):
         self.ssel_table.update(values=values)
@@ -36,45 +46,40 @@ class PartSearcher:
         if query:
             found_items = _search_inv_by_query(query, inv)
         else:
-            sel_row = self._get_selected_rbom_row()
+            sel_row = gui.get_selected_table_row(self.rbom_table)
             found_items = _search_inv_by_item(sel_row, inv) if sel_row else \
                 [_inv_item_unmap(inv_item) for inv_item in inv]
         self._update_gui(found_items, bom.inv_fields)
 
     def _search_dk(self, query):
-        if query:
-            dk_resp = digikeyw.search_items(query)
-            fmt_dk_items = [list(digikeyw.format_item(item).values()) for item in dk_resp.products]
-            self._update_gui(fmt_dk_items, bom.dk_fields)
-        else:
-            sel_row = self._get_selected_rbom_row()
-            dk_pn = sel_row['Digi-Key Part Number']
-            dk_item = digikeyw.get_item(dk_pn)
-            fmt_dk_item = digikeyw.format_item(dk_item)
-            self._update_gui([list(fmt_dk_item.values())], bom.dk_fields)
+        self._generic_search(query, 'Digi-Key Part Number',
+                             digikeyw.get_item, digikeyw.search_items, digikeyw.format_item,
+                             bom.dk_fields)
 
     def _search_mouser(self, query):
-        if query:
-            mouser_resp = mouserw.search_items(query)
-            fmt_mouser_items = [list(mouserw.format_item(item).values()) for item in mouser_resp]
-            self._update_gui(fmt_mouser_items, bom.mouser_fields)
-        else:
-            sel_row = self._get_selected_rbom_row()
-            mouser_pn = sel_row['Mouser Part Number']
-            mouser_item = mouserw.get_item(mouser_pn)
-            fmt_mouser_item = mouserw.format_item(mouser_item)
-            self._update_gui([list(fmt_mouser_item.values())], bom.mouser_fields)
+        self._generic_search(query, 'Mouser Part Number',
+                             mouserw.get_item, mouserw.search_items, mouserw.format_item,
+                             bom.mouser_fields)
 
     def _search_jlc(self, query):
+        self._generic_search(query, 'JLCPCB Part Number',
+                             jlcpcbw.get_item, jlcpcbw.search_items, None,
+                             bom.jlc_fields)
+
+    def _generic_search(self, query, row_key, get_item_func, search_func, fmt_func, fields):
         if query:
-            #TODO fix
-            pass
+            resp = search_func(query)
+            fmt_items = [list((fmt_func(item) if fmt_func else item).values()) for item in resp]
+            self._update_gui(fmt_items, fields)
         else:
-            sel_row = self._get_selected_rbom_row()
-            jlc_pn = sel_row['JLCPCB Part Number']
-            jlc_item = jlcpcbw.get_item(jlc_pn)
-            fmt_jlc_item = [list(jlc_item.values())]
-            self._update_gui(fmt_jlc_item, bom.jlc_fields)
+            sel_row = gui.get_selected_table_row(self.rbom_table)
+            if not sel_row:
+                popups.error('No RBOM row was selected')
+                return
+            part_number = sel_row[row_key]
+            item = get_item_func(part_number)
+            fmt_item = fmt_func(item) if fmt_func else item
+            self._update_gui([list(fmt_item.values())], fields)
 
 
 def _search_inv_by_query(query, inv):
@@ -115,6 +120,13 @@ def _has_matching_properties(sel_item: dict[str], inv_item: dict) -> bool:
 
 def _inv_item_unmap(item):
     return [item[k] for k in bom.inv_fields]
+
+
+def _check_missing_env(key, designator):
+    key_missing = key not in os.environ or len(os.environ[key]) == 0
+    if key_missing:
+        popups.error(f'No {key} environment variable. Not searching {designator}.')
+    return key_missing
 
 
 if __name__ == "__main__":
