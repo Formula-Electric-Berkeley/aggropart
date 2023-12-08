@@ -17,7 +17,7 @@ class PartSearcher:
     def execute(self, src, query):
         self.last_src = src
         if src == 'Inventory':
-            if _check_missing_env('NOTION_TOKEN', src) or _check_missing_env('NOTION_DB_ID', src):
+            if _check_missing_env('NOTION_TOKEN', src) or _check_missing_env('NOTION_INV_DB_ID', src):
                 return
             # This causes the GUI to freeze because it is slow
             # But this is faster than using another thread

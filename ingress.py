@@ -24,21 +24,29 @@ LABEL_FONT_SIZE = 40
 FONT_REL_PATH = 'Consolas.ttf'
 QR_IMG_FN = 'qr.png'
 DM_IMG_FN = 'dm.png'
+LABEL_PDF_FN = 'labels.pdf'
 
 
 def main(args):
     order_items = digikeyw.get_order_items(args.order)[:2]
+    box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'])
+    box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
+
     labels = []
     for item in order_items:
         common.pprint(format_order_item(item))
-        if (common.wait_yn('Enter item into Notion and print label?')):
-            props = {
-                'Part Number': inventory.make_text_property(item.manufacturer_part_number),
-                'Current Quantity': item.quantity,
-                'Description': inventory.make_text_property(item.product_description),
-                # 'EECS Box': 'S0019'
-            }
-            notion_page = inventory.insert_db(props)
+        resp = None
+        while True:
+            # Keep trying until a valid box is entered
+            resp = input('Which EECS Box should this go into? (ex XS0099, S0099, M0099 - leave blank to skip)? ')
+            if resp in box_inv:
+                break
+            else:
+                print(f'Box {resp} not in EECS inventory. Please try again.')
+
+        if len(resp) != 0:
+            props = make_props(item, box_inv[resp])
+            notion_page = inventory.insert_db(properties=props)
 
             qr = segno.make_qr(notion_page['url'], error='H')
             qr.save(QR_IMG_FN, scale=CODE_CELL_SIZE)
@@ -54,13 +62,12 @@ def main(args):
             label.append_img(dm_img)
             label.append_blank(20)
             label.append_text(item.manufacturer_part_number)
-            label.save(f"temp/{item.manufacturer_part_number}.png")
             labels.append(label.dst)
 
             os.remove(QR_IMG_FN)
             os.remove(DM_IMG_FN)
 
-    labels[0].save('labels.pdf', save_all=True, append_images=labels[1:])
+    labels[0].save(LABEL_PDF_FN, save_all=True, append_images=labels[1:])
             
 
 def format_order_item(item):
@@ -71,6 +78,49 @@ def format_order_item(item):
         'Quantity': item.quantity,
         'Unit Price': item.unit_price,
         'Total Price': item.total_price,
+    }
+
+
+def make_props(item, box_id):
+    return {
+        'Part Number': {
+            "id": "title",
+            "type": "title",
+            "title": [
+                make_rich_text_prop(item.manufacturer_part_number)
+            ]
+        },
+        'Current Quantity': {
+            "number": item.quantity,
+        },
+        'Description': {
+            "rich_text": [
+                make_rich_text_prop(item.product_description)
+            ]
+        },
+        'Box': {
+            "relation": [{ "id": box_id }]
+        }
+    }
+
+
+def make_rich_text_prop(text):
+    return {
+        "type": "text",
+        "text": {
+            "content": text,
+            "link": None
+        },
+        "annotations": {
+            "bold": False,
+            "italic": False,
+            "strikethrough": False,
+            "underline": False,
+            "code": False,
+            "color": "default"
+        },
+        "plain_text": text,
+        "href": None
     }
 
 

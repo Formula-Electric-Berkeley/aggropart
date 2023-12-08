@@ -62,7 +62,7 @@ def get_page(page_id: str, client: NotionClient = create_client(),
     return value
 
 
-def get_db(db_id: str = os.environ['NOTION_DB_ID'], client: NotionClient = create_client(),
+def get_db(db_id: str = os.environ['NOTION_INV_DB_ID'], client: NotionClient = create_client(),
            force_refresh: bool = False, silent: bool = False) -> dict:
     """Get the specified database content by querying the Notion API."""
     def updater(cache, key):
@@ -105,15 +105,10 @@ def update_db(query, quantity, mode, db):
     raise NotImplementedError()
 
 
-def make_text_property(value):
-    """TODO write this documentation"""
-    return [{"text": {"content": value}}]
-
-
 def insert_db(properties):
     """Add a database item with the properties specified."""
     client = create_client()
-    return client.pages.create(parent={'database_id': os.environ['NOTION_DB_ID']}, properties=properties)
+    return client.pages.create(parent={'database_id': os.environ['NOTION_INV_DB_ID']}, properties=properties)
     # TODO validate EECS box number - another request to notion to get
 
 
@@ -155,7 +150,7 @@ def _parse_args() -> str:
 
 def validate_args(args) -> str:
     common._checkset_env('NOTION_TOKEN', args.token, 'Notion token')
-    common._checkset_env('NOTION_DB_ID', args.dbid, 'Notion database ID')
+    common._checkset_env('NOTION_INV_DB_ID', args.dbid, 'Notion database ID')
     common.init_dotenv()
 
     if args.operation in ('list', 'search', 'update', 'insert'):
