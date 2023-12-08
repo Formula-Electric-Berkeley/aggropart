@@ -28,7 +28,7 @@ LABEL_PDF_FN = 'labels.pdf'
 
 
 def main(args):
-    order_items = digikeyw.get_order_items(args.order)[:2]
+    order_items = digikeyw.get_order_items(args.order)
     box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'])
     box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
 
