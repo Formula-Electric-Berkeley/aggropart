@@ -8,7 +8,6 @@ import glob
 import os
 import sys
 
-import dotenv
 from notion_client import Client as NotionClient
 
 import common
@@ -26,7 +25,7 @@ db_mappings = {
 _db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=21600)
 _page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=21600)
 _client_inst = None
-dotenv.load_dotenv()
+common.init_dotenv()
 
 
 def _item_is_valid(item: dict) -> bool:
@@ -83,7 +82,7 @@ def get_db(db_id: str = os.environ['NOTION_DB_ID'], client: NotionClient = creat
     return value
 
 
-def list_db(db: dict) -> list[dict]:
+def list_db(db: dict) -> list:
     """List all entries in the Notion database."""
     inventory = []
     for item in db:
@@ -106,11 +105,16 @@ def update_db(query, quantity, mode, db):
     raise NotImplementedError()
 
 
-def insert_db(attributes, quantity, db):
-    """Update the quantity of one database item by the quantity specified."""
-    # TODO implement
+def make_text_property(value):
+    """TODO write this documentation"""
+    return [{"text": {"content": value}}]
+
+
+def insert_db(properties):
+    """Add a database item with the properties specified."""
+    client = create_client()
+    return client.pages.create(parent={'database_id': os.environ['NOTION_DB_ID']}, properties=properties)
     # TODO validate EECS box number - another request to notion to get
-    raise NotImplementedError()
 
 
 def _filter_inv_item(db: dict, query: str):
@@ -150,8 +154,9 @@ def _parse_args() -> str:
 
 
 def validate_args(args) -> str:
-    _checkset_env('NOTION_TOKEN', args.token, 'Notion token')
-    _checkset_env('NOTION_DB_ID', args.dbid, 'Notion database ID')
+    common._checkset_env('NOTION_TOKEN', args.token, 'Notion token')
+    common._checkset_env('NOTION_DB_ID', args.dbid, 'Notion database ID')
+    common.init_dotenv()
 
     if args.operation in ('list', 'search', 'update', 'insert'):
         db = get_db(force_refresh=args.refresh)
@@ -166,15 +171,6 @@ def validate_args(args) -> str:
             return common.pfmt(insert_db(args.part_number, args.quantity, args.description, db))
     else:
         raise ValueError(f'"{args.operation}" was not recognized as a valid operation')
-
-
-def _checkset_env(key: str, arg: str, designator: str) -> None:
-    if key not in os.environ or len(os.environ[key]) == 0:
-        if not arg:
-            raise ValueError(f'No {designator} was specified.')
-        os.environ[key] = arg
-    elif arg:
-        print(f'WARNING: {designator} was specified but overridden by entry in .env')
 
 
 if __name__ == "__main__":

@@ -8,6 +8,11 @@ import digikey as dk_api
 from digikey.v3.productinformation import KeywordSearchRequest
 
 
+def get_order_items(sales_order_id):
+    resp = dk_api.status_salesorder_id(sales_order_id)
+    return resp if resp is None else resp.line_items
+
+
 def search_items(keyword, max_items=10):
     request = KeywordSearchRequest(keywords=keyword, record_count=max_items)
     return dk_api.keyword_search(body=request)

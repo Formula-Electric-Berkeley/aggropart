@@ -5,10 +5,10 @@ TODO add description
 
 import csv
 
-import dotenv
 import PySimpleGUI as psg
 
 import bom
+import common
 import inventory
 import partsearcher
 import popups
@@ -214,7 +214,7 @@ def _pack_frame(name):
 
 
 if __name__ == "__main__":
-    dotenv.load_dotenv()
+    common.init_dotenv()
 
     rbom_table = _make_table(bom.altium_fields, '-RBOM-TABLE-')
     ssel_table = _make_table(bom.search_fields, '-SSEL-TABLE-')

@@ -1,6 +1,11 @@
 beautifulsoup4==4.12.2
 digikey-api==1.0.0
 notion-client==2.0.0
+Pillow==9.5.0
+pystrich==0.8
+python_barcode==0.15.1
 python-dotenv==1.0.0
 PySimpleGUI==4.60.5
 requests==2.31.0
+segno==7.0.0
+textencoder==0.1.6
