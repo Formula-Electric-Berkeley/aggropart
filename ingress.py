@@ -30,7 +30,7 @@ LABEL_PDF_FN = 'labels.pdf'
 def main(args):
     # Get items from distributor corresponding to passed argument
     order_items = mouserw.get_order_items(args.order) if args.distributor == 'mouser' else digikeyw.get_order_items(args.order)
-    order_items_std = [DistributorItem(args.distributor, item) for item in order_items][:2]
+    order_items_std = [DistributorItem(args.distributor, item) for item in order_items]
     if len(order_items_std) == 0:
         print(f'No items were retrieved from the supplied {args.distributor} order ID {args.order}')
 
