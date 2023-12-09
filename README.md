@@ -1,10 +1,11 @@
-# aggropart <img src="images/logo.png" width="32px" height="32px">
+# aggropart `<img src="images/logo.png" width="32px" height="32px">`
 
-A utility program to automate the selection of 
+A utility program to automate the selection of
 parts from an Altium BOM file.
 
 ## Usage
-aggropart aims to automate the process of turning an Altium BOM 
+
+aggropart aims to automate the process of turning an Altium BOM
 into a series of purchases or inventory acquisitions.
 
 To accomplish this, the user first opens the main GUI (`python3 gui.py`)
@@ -12,11 +13,13 @@ To accomplish this, the user first opens the main GUI (`python3 gui.py`)
 ![](images/blank.png)
 
 On the GUI there are three stages which each BOM item progresses through:
+
 - Remaining BOM (RBOM)
 - Source Selector (SSEL)
 - Processed BOM (PBOM)
 
 ### RBOM
+
 Altium BOMs are first loaded from a CSV file (CSV only, no JSON, etc)
 by clicking the "Open BOM CSV" button. The BOM is then loaded into
 the RBOM stage. All items in the BOM are displayed.
@@ -24,6 +27,7 @@ the RBOM stage. All items in the BOM are displayed.
 ![](images/rbom.png)
 
 ### SSEL
+
 Once loaded, the user may start to search for parts which match
 each BOM entry. Possible sources from which to search are:
 EECS Inventory, Digikey, Mouser, or JLCPCB (assembly service).
@@ -42,6 +46,7 @@ Note that each search requires specific configutation and API
 perimssions. See the setup/installation section for more details.
 
 ### PBOM
+
 Once the user has selected both an item in the RBOM and SSEL stages
 (meaning a BOM item and a source to acquire it from), they can then
 associate the two in the PBOM stage.
@@ -54,23 +59,40 @@ and append the BOM item back to the RBOM section.
 
 Once finished, the user can export this data to CSV format by
 clicking "Export All PBOMs". This will export one CSV for each PBOM,
-stored under the filepath "out/<src>_bom.csv". To export only the
+stored under the filepath "out/`<src>`_bom.csv". To export only the
 current PBOM, click "Export Current PBOM" instead.
 
 ![](images/pbom.png)
 
 ## Installation
+
 1. Install Python dependencies with `pip`:
+
 > python3 -m pip install -r requirements.txt
+
 2. Copy `.env.template` to `.env`
 3. Populate `.env` with API keys (no string delimiters)
-   1. If you are a member of FEB, ask EECS admin for keys first. 
+   1. If you are a member of FEB, ask EECS admin for keys first.
       You will not need to do the steps below.
    2. For Digikey: https://developer.digikey.com/get_started
    3. DIGIKEY_STORAGE_PATH should be "cache/"
-   4. For Mouser: https://www.mouser.com/api-search/
+   4. For Mouser: https://www.mouser.com/api-hub/
    5. For Notion (Inventory): https://developers.notion.com/
    6. JLC does not have a public API
-4. Digikey will ask for OAuth (login) authentication the first 
+4. Digikey will ask for OAuth (login) authentication the first
    time the Digikey search functionality is used.
 5. Run the GUI with `python3 gui.py`
+
+## Additional Functionality
+
+### `ingress.py`
+
+```
+usage: ingress.py [-h] order {digikey,mouser} ...
+
+Automatically queries, inventories, and labels items purchased from Digikey and Mouser.
+
+positional arguments:
+  order             Digikey SALES order ID or Mouser SALES order number (not web/invoice)
+  {digikey,mouser}  distributor source for the passed sales order number
+```

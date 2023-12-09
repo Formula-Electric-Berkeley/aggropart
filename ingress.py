@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TODO add description
+Automatically queries, inventories, and labels items purchased from Digikey and Mouser.
 """
 
 import argparse
@@ -221,7 +221,7 @@ def open_and_scale_img(fn, scale, scale_is_height):
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
-    distributors = parser.add_subparsers(dest='distributor', help='category of script to run', required=True)
+    distributors = parser.add_subparsers(dest='distributor', help='distributor source for the passed sales order number', required=True)
 
     dist_digikey = distributors.add_parser('digikey')
     dist_digikey.add_argument('--id', '-i', help='Digikey client ID; required if not specified in .env')
