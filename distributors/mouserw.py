@@ -7,6 +7,8 @@ import os
 
 import requests
 
+TIMEOUT = 10
+
 
 fake_response_item = {
     'MouserPartNumber': '',
@@ -25,6 +27,12 @@ fake_response_item = {
 }
 
 
+def get_order_items(order_id):
+    url = make_req_url('/api/v1/orderhistory/salesOrderNumber') + f"&salesOrderNumber={order_id}"
+    resp = requests.get(url=url, timeout=TIMEOUT)
+    return [] if resp.status_code != 200 else resp.json()['OrderLines']
+
+
 def search_items(keyword, max_items=10):
     body = {
       "SearchByKeywordRequest": {
@@ -34,7 +42,7 @@ def search_items(keyword, max_items=10):
       }
     }
     url = make_req_url('/api/v1/search/keyword')
-    resp = requests.post(url=url, json=body, timeout=10)
+    resp = requests.post(url=url, json=body, timeout=TIMEOUT)
     return resp.json()['SearchResults']['Parts']
 
 
@@ -45,7 +53,7 @@ def get_item(part_number):
       }
     }
     url = make_req_url('/api/v1/search/partnumber')
-    resp = requests.post(url=url, json=body, timeout=10)
+    resp = requests.post(url=url, json=body, timeout=TIMEOUT)
     resp_json = resp.json()
     if 'SearchResults' in resp_json and resp_json['SearchResults']:
         return resp_json['SearchResults']['Parts'][0]
@@ -54,7 +62,7 @@ def get_item(part_number):
 
 
 def make_req_url(endpoint):
-    return f'https://api.mouser.com{endpoint}?apiKey={os.environ["MOUSER_PART_API_KEY"]}&version=1'
+    return f'https://api.mouser.com{endpoint}?apiKey={os.environ["MOUSER_API_KEY"]}&version=1'
 
 
 def format_item(item):

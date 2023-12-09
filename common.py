@@ -11,11 +11,11 @@ def pfmt(obj) -> str:
     return json.dumps(obj, indent=4)
 
 
-def pprint(obj) -> None:
-    print(pfmt(obj))
+def pprint(obj, fmt=pfmt) -> None:
+    print(fmt(obj))
 
 
-def wait_yn(prompt):
+def wait_yn(prompt) -> bool:
     """Wait for the user to enter y or n to a given prompt."""
     while True:
         resp = input(f'{prompt} [y (default)/n]: ')
@@ -29,7 +29,7 @@ def wait_yn(prompt):
             print('Please answer [y/n].')
 
 
-def _checkset_env(key: str, arg: str, designator: str) -> None:
+def checkset_env(key: str, arg: str, designator: str) -> None:
     if key not in os.environ or len(os.environ[key]) == 0:
         if not arg:
             raise ValueError(f'No {designator} was specified.')

@@ -13,7 +13,7 @@ import segno
 
 import common
 import inventory
-from distributors import digikeyw
+from distributors import digikeyw, mouserw
 
 
 PX_PER_IN = 203 #8 DPI
@@ -28,13 +28,17 @@ LABEL_PDF_FN = 'labels.pdf'
 
 
 def main(args):
-    order_items = digikeyw.get_order_items(args.order)
+    order_items = mouserw.get_order_items(args.order) if args.distributor == 'mouser' else digikeyw.get_order_items(args.order)
+    order_items_std = [DistributorItem(args.distributor, item) for item in order_items][:2]
+    if len(order_items_std) == 0:
+        print(f'No items were retrieved from the supplied {args.distributor} order ID {args.order}')
+
     box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'])
     box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
 
     labels = []
-    for item in order_items:
-        common.pprint(format_order_item(item))
+    for item in order_items_std:
+        common.pprint(item.to_dict())
         resp = None
         while True:
             # Keep trying until a valid box is entered
@@ -48,37 +52,67 @@ def main(args):
             props = make_props(item, box_inv[resp])
             notion_page = inventory.insert_db(properties=props)
 
-            qr = segno.make_qr(notion_page['url'], error='H')
-            qr.save(QR_IMG_FN, scale=CODE_CELL_SIZE)
-
             dm = DataMatrixEncoder(notion_page['url'])
             dm.save(DM_IMG_FN, cellsize=CODE_CELL_SIZE)
 
-            qr_img = open_and_scale_img(QR_IMG_FN, 0.45, True)
+            qr = segno.make_qr(notion_page['url'], error='H')
+            qr.save(QR_IMG_FN, scale=CODE_CELL_SIZE)
+
             dm_img = open_and_scale_img(DM_IMG_FN, 0.35, True)
+            qr_img = open_and_scale_img(QR_IMG_FN, 0.45, True)
 
             label = ImageBuilder()
-            label.append_img(qr_img)
+            label.append_blank(15)
             label.append_img(dm_img)
-            label.append_blank(20)
-            label.append_text(item.manufacturer_part_number)
+            label.append_img(qr_img)
+            label.append_blank(15)
+            label.append_text(item.mfg_part_num)
             labels.append(label.dst)
 
             os.remove(QR_IMG_FN)
             os.remove(DM_IMG_FN)
 
-    labels[0].save(LABEL_PDF_FN, save_all=True, append_images=labels[1:])
-            
+    if len(labels) > 1:
+        labels[0].save(LABEL_PDF_FN, save_all=True, append_images=labels[1:])
+    elif len(labels) > 0:
+        labels[0].save(LABEL_PDF_FN)
 
-def format_order_item(item):
-    return {
-        'Mfg Part Number': item.manufacturer_part_number,
-        'Digikey Part Number': item.digi_key_part_number,
-        'Description': item.product_description,
-        'Quantity': item.quantity,
-        'Unit Price': item.unit_price,
-        'Total Price': item.total_price,
-    }
+
+class DistributorItem:
+    def __init__(self, distributor_name, item):
+        self.distributor = distributor_name
+        if distributor_name == 'digikey':
+            self._digikey_fmt(item)
+        elif distributor_name == 'mouser':
+            self._mouser_fmt(item)
+        else:
+            raise ValueError(f'Invalid distributor name: {distributor_name}')
+
+    def _digikey_fmt(self, item):
+        self.mfg_part_num = item.manufacturer_part_number
+        self.dist_part_num = item.digi_key_part_number
+        self.description = item.product_description
+        self.qty = item.quantity
+        self.unit_price = item.unit_price
+        self.total_price = item.total_price
+
+    def _mouser_fmt(self, item):
+        self.mfg_part_num = item['ProductInfo']['ManufacturerPartNumber']
+        self.dist_part_num = item['ProductInfo']['MouserPartNumber']
+        self.description = item['ProductInfo']['PartDescription']
+        self.qty = item['Quantity']
+        self.unit_price = item['UnitPrice']
+        self.total_price = item['ExtPrice']
+
+    def to_dict(self):
+        return {
+            'Mfg Part Number': self.mfg_part_num,
+            f'{self.distributor.title()} Part Number': self.dist_part_num,
+            'Description': self.description,
+            'Quantity': self.qty,
+            'Unit Price': self.unit_price,
+            'Total Price': self.total_price,
+        }
 
 
 def make_props(item, box_id):
@@ -87,15 +121,15 @@ def make_props(item, box_id):
             "id": "title",
             "type": "title",
             "title": [
-                make_rich_text_prop(item.manufacturer_part_number)
+                make_rich_text_prop(item.mfg_part_num)
             ]
         },
         'Current Quantity': {
-            "number": item.quantity,
+            "number": item.qty,
         },
         'Description': {
             "rich_text": [
-                make_rich_text_prop(item.product_description)
+                make_rich_text_prop(item.description)
             ]
         },
         'Box': {
@@ -167,13 +201,23 @@ def open_and_scale_img(fn, scale, scale_is_height):
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('order', help='Digikey sales order ID')
-    parser.add_argument('--id', '-i', help='Digikey client ID; required if not specified in .env')
-    parser.add_argument('--secret', '-s', help='Digikey client secret; required if not specified in .env')
+    parser.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
+    distributors = parser.add_subparsers(dest='distributor', help='category of script to run', required=True)
+
+    dist_digikey = distributors.add_parser('digikey')
+    dist_digikey.add_argument('--id', '-i', help='Digikey client ID; required if not specified in .env')
+    dist_digikey.add_argument('--secret', '-s', help='Digikey client secret; required if not specified in .env')
+
+    dist_mouser = distributors.add_parser('mouser')
+    dist_mouser.add_argument('--key', '-k', help='Mouser API key; required if not specified in .env')
+
     args = parser.parse_args()
 
-    common._checkset_env('DIGIKEY_CLIENT_ID', args.id, 'Digikey client ID')
-    common._checkset_env('DIGIKEY_CLIENT_SECRET', args.secret, 'Digikey client secret')
+    if args.distributor == 'digikey':
+        common.checkset_env('DIGIKEY_CLIENT_ID', args.id, 'Digikey client ID')
+        common.checkset_env('DIGIKEY_CLIENT_SECRET', args.secret, 'Digikey client secret')
+    elif args.distributor == 'mouser':
+        common.checkset_env('MOUSER_API_KEY', args.key, 'Mouser API key')
 
     return main(args)
 

@@ -29,7 +29,7 @@ class PartSearcher:
                 return
             self._search_dk(query)
         elif src == 'Mouser':
-            if _check_missing_env('MOUSER_PART_API_KEY', src):
+            if _check_missing_env('MOUSER_API_KEY', src):
                 return
             self._search_mouser(query)
         elif src == 'JLCPCB':

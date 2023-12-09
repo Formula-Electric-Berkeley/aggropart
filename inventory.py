@@ -149,8 +149,8 @@ def _parse_args() -> str:
 
 
 def validate_args(args) -> str:
-    common._checkset_env('NOTION_TOKEN', args.token, 'Notion token')
-    common._checkset_env('NOTION_INV_DB_ID', args.dbid, 'Notion database ID')
+    common.checkset_env('NOTION_TOKEN', args.token, 'Notion token')
+    common.checkset_env('NOTION_INV_DB_ID', args.dbid, 'Notion database ID')
     common.init_dotenv()
 
     if args.operation in ('list', 'search', 'update', 'insert'):
