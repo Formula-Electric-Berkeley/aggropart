@@ -9,3 +9,4 @@ PySimpleGUI==4.60.5
 requests==2.31.0
 segno==7.0.0
 textencoder==0.1.6
+pyperclip==1.8.2

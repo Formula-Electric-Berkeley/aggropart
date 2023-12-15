@@ -4,7 +4,7 @@ import os
 import dotenv
 
 
-version = 'v0.1.1'
+VERSION = 'v0.1.2'
 
 
 def pfmt(obj) -> str:

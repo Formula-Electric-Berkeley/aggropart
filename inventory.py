@@ -21,9 +21,10 @@ db_mappings = {
            '["properties"]["Part Number"]["title"][0]["plain_text"]',
     'URL': 'db["url"]'
 }
+# TODO make the box field use the box inventory database instead of retrieving all box pages
 
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=21600)
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=21600)
+_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=3600)
+_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=3600)
 _client_inst = None
 common.init_dotenv()
 
@@ -105,11 +106,10 @@ def update_db(query, quantity, mode, db):
     raise NotImplementedError()
 
 
-def insert_db(properties):
+def insert_db(properties, db_id=os.environ['NOTION_INV_DB_ID']):
     """Add a database item with the properties specified."""
     client = create_client()
-    return client.pages.create(parent={'database_id': os.environ['NOTION_INV_DB_ID']}, properties=properties)
-    # TODO validate EECS box number - another request to notion to get
+    return client.pages.create(parent={'database_id': db_id}, properties=properties)
 
 
 def _filter_inv_item(db: dict, query: str):

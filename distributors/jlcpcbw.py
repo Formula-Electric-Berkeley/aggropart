@@ -12,6 +12,7 @@ import urllib.request
 
 class JLCItem:
     def __init__(self, item_eval, search_eval, default):
+        """TODO document"""
         self.item_eval = item_eval
         self.search_eval = search_eval
         self.default = default
@@ -68,7 +69,7 @@ def search_items(keyword):
     return [_filter_item(row, lambda v: v.search_eval) for row in component_rows]
 
 
-def get_item(part_number: str) -> dict[str]:
+def get_item(part_number: str) -> dict:
     url = f'https://jlcpcb.com/partdetail/{part_number}'
     req = urllib.request.urlopen(url)
     resp = req.read()

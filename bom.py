@@ -1,9 +1,14 @@
 import csv
 import os
 
+import common
 import inventory
+import popups
 from distributors import jlcpcbw, digikeyw, mouserw
 from digikey.v3.productinformation.models.product_details import ProductDetails
+
+
+OUT_FOLDER = "out"
 
 
 required_fields = [
@@ -21,6 +26,13 @@ optional_fields = [
     'JLCPCB Part Type'  # Only matters for JLC price esimation
 ]
 
+bom_fields_msg = f"""
+The following BOM fields are required from Altium
+{common.pfmt(required_fields)}
+The following BOM fields are optional from Altium
+{common.pfmt(optional_fields)}
+"""
+
 altium_fields = required_fields + optional_fields
 
 inv_fields = list(inventory.db_mappings.keys())
@@ -36,12 +48,9 @@ search_fields = [f'Placeholder{i}' for i in range(_field_maxlen)]
 
 def init(fp):
     if not os.path.exists(fp):
-        raise FileNotFoundError(fp)
-
-    if not fp.lower().endswith('.csv'):
-        raise ValueError(f'Filepath "{fp}" does not end in .csv')
-
-    os.makedirs('out/', exist_ok=True)
+        popups.error(f"File does not exist: {fp}")
+    elif not fp.lower().endswith('.csv'):
+        popups.error(f'Filepath "{fp}" does not end in .csv')
 
 
 def read(fp):

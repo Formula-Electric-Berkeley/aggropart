@@ -1,4 +1,5 @@
 import os
+import threading
 
 import bom
 import gui
@@ -9,19 +10,22 @@ from distributors import digikeyw, mouserw, jlcpcbw
 
 
 class PartSearcher:
-    def __init__(self, rbom_table, ssel_table):
+    def __init__(self, window, rbom_table, ssel_table):
+        self.window = window
         self.rbom_table = rbom_table
         self.ssel_table = ssel_table
         self.last_src = None
+        self.update_queue = []
 
     def execute(self, src, query):
         self.last_src = src
         if src == 'Inventory':
             if _check_missing_env('NOTION_TOKEN', src) or _check_missing_env('NOTION_INV_DB_ID', src):
                 return
-            # This causes the GUI to freeze because it is slow
-            # But this is faster than using another thread
-            self._search_inv(query)
+            self.window.write_event_value('-INV-UPDATE-BEGIN-', None)
+            inv_thread = threading.Thread(target=self._search_inv, args=(query,))
+            inv_thread.daemon = True
+            inv_thread.start()
         elif src == 'Digikey':
             if _check_missing_env('DIGIKEY_CLIENT_ID', src) or \
                     _check_missing_env('DIGIKEY_CLIENT_SECRET', src) or \
@@ -36,20 +40,28 @@ class PartSearcher:
             self._search_jlc(query)
 
     def _update_gui(self, values, headings):
-        self.ssel_table.update(values=values)
+        self.ssel_table.update_values(values)
         padded_headings = headings + [''] * (len(bom.search_fields) - len(headings))
         for cid, text in zip(bom.search_fields, padded_headings):
             self.ssel_table.Widget.heading(cid, text=text)
 
+    def update_gui_queued(self):
+        if len(self.update_queue) > 0:
+            values = self.update_queue.pop()
+            self._update_gui(values, bom.inv_fields)
+            self.window.write_event_value('-INV-UPDATE-END-', None)
+
     def _search_inv(self, query):
+        query = query.lower()
         inv = inventory.list_db(inventory.get_db())
         if query:
             found_items = _search_inv_by_query(query, inv)
         else:
-            sel_row = gui.get_selected_table_row(self.rbom_table)
+            sel_row = self.rbom_table.get_selected_row()
             found_items = _search_inv_by_item(sel_row, inv) if sel_row else \
                 [_inv_item_unmap(inv_item) for inv_item in inv]
-        self._update_gui(found_items, bom.inv_fields)
+        self.update_queue.append(found_items)
+        self.window.write_event_value('-INV-UPDATE-QUEUED-', None)
 
     def _search_dk(self, query):
         self._generic_search(query, 'Digi-Key Part Number',
@@ -91,9 +103,13 @@ def _search_inv_by_query(query, inv):
 
     for inv_item in inv:
         for inv_attr_val in inv_item.values():
-            if type(inv_attr_val) == str and len(inv_attr_val) > 0 and \
-                    (query in inv_attr_val or inv_attr_val in query):
-                found_items.append(_inv_item_unmap(inv_item))
+            if type(inv_attr_val) != str:
+                continue
+            inv_attr_val = inv_attr_val.lower()
+            if len(inv_attr_val) > 0 and (query in inv_attr_val or inv_attr_val in query):
+                found_item = _inv_item_unmap(inv_item)
+                if found_item not in found_items:
+                    found_items.append(found_item)
     return found_items
 
 
@@ -104,15 +120,20 @@ def _search_inv_by_item(item, inv):
     for inv_item in inv:
         if _has_matching_properties(item, inv_item) and \
                 (inv_item['Quantity'] >= item['Quantity']):
-            found_items.append(_inv_item_unmap(inv_item))
+            found_item = _inv_item_unmap(inv_item)
+            if found_item not in found_items:
+                found_items.append(found_item)
     return found_items
 
 
-def _has_matching_properties(sel_item: dict[str], inv_item: dict) -> bool:
+def _has_matching_properties(sel_item: dict, inv_item: dict) -> bool:
     for sel_attr_val in sel_item.values():
         for inv_attr_val in inv_item.values():
-            if type(sel_attr_val) == str and type(inv_attr_val) == str and \
-                    len(sel_attr_val) > 0 and len(inv_attr_val) > 0 and \
+            if type(sel_attr_val) != str or type(inv_attr_val) != str:
+                continue
+            inv_attr_val = inv_attr_val.lower()
+            sel_attr_val = sel_attr_val.lower()
+            if len(sel_attr_val) > 0 and len(inv_attr_val) > 0 and \
                     (sel_attr_val in inv_attr_val or inv_attr_val in sel_attr_val):
                 return True
     return False

@@ -1,15 +1,6 @@
 import PySimpleGUI as psg
 
-import bom
 import common
-
-
-bom_fields_msg = f"""
-The following BOM fields are required from Altium
-{common.pfmt(bom.required_fields)}
-The following BOM fields are optional from Altium
-{common.pfmt(bom.optional_fields)}
-"""
 
 instructions_msg = f"""
 For instructions on how to use this program, see the
@@ -30,7 +21,7 @@ about_msg = f"""
 github.com/Formula-Electric-Berkeley/aggropart
                  github.com/boomaa23
                  
-                       Version {common.version}
+                       Version {common.VERSION}
 """
 
 
