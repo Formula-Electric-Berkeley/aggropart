@@ -31,3 +31,25 @@ def info(msg):
 
 def error(err):
     psg.Popup(err)
+
+def input_(msg, tooltip=None, default=None, validator=(lambda v: True)):
+    layout = [[
+        psg.Text(msg), 
+        psg.Input(s=15, tooltip=(msg if tooltip is None else tooltip), default_text=default, key='-IPT-'),
+        psg.Button(button_text='OK', key='-OK-'),
+        psg.Button(button_text='Cancel', key='-CANCEL-')
+    ]]
+    
+    window = psg.Window('aggropart', layout, modal=True, grab_anywhere=True, finalize=True)
+    window['-IPT-'].bind('<Return>', 'ENTER-')
+
+    while True:
+        event, values = window.read()
+        if event == psg.WIN_CLOSED or event == 'Exit' or event == '-CANCEL-':
+            window.close()
+            return False
+        if event == '-OK-' or event == '-IPT-ENTER-':
+            if validator(values['-IPT-']):
+                window.close()
+                return values['-IPT-']
+            

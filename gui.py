@@ -128,7 +128,7 @@ class SectionTable:
 
 
 def _register_all_events():
-    RegistryEvent('-BOM-OPEN-', _open_bom)
+    RegistryEvent('-BOM-OPEN-', lambda: bom.open_(values, rbom_table, pbom_subtables))
     RegistryEvent('-SELECT-SEARCH-QUERY-', lambda: search_query_input.update(disabled=False))
     RegistryEvent('-SELECT-SEARCH-PART-', lambda: search_query_input.update(disabled=True, value=''))
     RegistryEvent('-SEARCH-EXEC-', lambda: searcher.execute(values['-SEARCH-SRC-'], values['-SEARCH-QUERY-']))
@@ -165,22 +165,9 @@ def _clear_tables():
         table.clear_values()
 
 
-def _open_bom():
-    try:
-        fp = values['-BOM-OPEN-']
-        bom.init(fp)
-        bom_file = bom.read(fp)
-        bom_values = [[item.get(k, str()) for k in bom.altium_fields] for item in bom_file]
-        rbom_table.update_values(bom_values)
-    except FileNotFoundError:
-        popups.error('BOM file not found. Not opening.')
-    except ValueError as e:
-        popups.error(e)
-
-
 def _export_pbom(src):
     table = pbom_subtables[src]
-    with open(f'{bom.OUT_FOLDER}/{src.lower()}_bom.csv', 'w', newline='') as fh:
+    with open(f'{bom.OUT_FOLDER}/{src.lower()}_bom_{bom.loaded_filename}.csv', 'w', newline='') as fh:
         writer = csv.writer(fh)
         writer.writerow(bom.altium_fields + [''] + table.ColumnHeadings)
         for part, item in zip(item_part_assoc_map[src], table.Values):
@@ -193,6 +180,7 @@ def _export_all_pboms():
 
 
 def _assoc_item_part():
+    #TODO check quantity requested by RBOM against SSEL
     rbom_row = rbom_table.get_selected_row(fmt=False)
     ssel_row = ssel_table.get_selected_row(fmt=False)
     if not rbom_row:

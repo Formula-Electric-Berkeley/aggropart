@@ -1,5 +1,6 @@
 import csv
 import os
+from pathlib import Path
 
 import common
 import inventory
@@ -12,7 +13,7 @@ OUT_FOLDER = "out"
 
 
 required_fields = [
-    'Comment',
+    'Name',
     'Quantity',
     'Digi-Key Part Number',
     'Mouser Part Number',
@@ -45,15 +46,61 @@ jlc_fields = list(jlcpcbw.item_fields.keys())
 _field_maxlen = len(max(inv_fields, dk_fields, mouser_fields, jlc_fields, key=lambda v: len(v)))
 search_fields = [f'Placeholder{i}' for i in range(_field_maxlen)]
 
+loaded_filename = str()
+
+
+def _validate_int(v):
+    try:
+        _ = int(v)
+        return True
+    except:
+        popups.error('Value entered was not an integer')
+
+
+def open_(values, rbom_table, pbom_subtables):
+    try:
+        fp = values['-BOM-OPEN-']
+        if not init(fp):
+            return
+        bom_qty = popups.input_('BOM Quantity: ', default='1', validator=_validate_int)
+        if not bom_qty:
+            return
+        bom_qty = int(bom_qty)
+
+        bom_values = []
+        bom_file = read_(fp)
+        for item in bom_file:
+            bom_item = []
+            for field in altium_fields:
+                raw_item = item.get(field, str())
+                if field == 'Quantity':
+                    bom_item.append(str(int(raw_item) * bom_qty))
+                else:
+                    bom_item.append(raw_item)
+            bom_values.append(bom_item)
+        rbom_table.update_values(bom_values)
+        for table in pbom_subtables.values():
+            table.clear_values()
+    except FileNotFoundError:
+        popups.error('BOM file not found. Not opening.')
+    except ValueError as e:
+        popups.error(e)
+
 
 def init(fp):
     if not os.path.exists(fp):
         popups.error(f"File does not exist: {fp}")
+        return False
     elif not fp.lower().endswith('.csv'):
         popups.error(f'Filepath "{fp}" does not end in .csv')
+        return False
+
+    global loaded_filename
+    loaded_filename = Path(fp).stem
+    return True
 
 
-def read(fp):
+def read_(fp):
     with open(fp, 'r') as fh:
         bom_csv = csv.reader(fh)
         try:
