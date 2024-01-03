@@ -18,6 +18,8 @@ import popups
 
 _event_registry = []
 _current_tab = 'Inventory'
+#TODO add PEP8 linter to this project (+checkstyle)
+#TODO move non-gui util files into util directory (difficult bc dependencies)
 
 
 class RegistryEvent:

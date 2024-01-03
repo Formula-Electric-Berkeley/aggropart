@@ -14,6 +14,7 @@ import segno
 import common
 import inventory
 from distributors import digikeyw, mouserw
+#TODO get rid of Consolas ttf in repo
 
 
 PX_PER_IN = 203 #8 DPI

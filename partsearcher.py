@@ -2,7 +2,6 @@ import os
 import threading
 
 import bom
-import gui
 import inventory
 import popups
 

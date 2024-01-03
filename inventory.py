@@ -23,8 +23,8 @@ db_mappings = {
 }
 # TODO make the box field use the box inventory database instead of retrieving all box pages
 
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=3600)
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=3600)
+_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
+_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
 _client_inst = None
 common.init_dotenv()
 

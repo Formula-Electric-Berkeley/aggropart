@@ -12,6 +12,7 @@ from digikey.v3.productinformation.models.product_details import ProductDetails
 OUT_FOLDER = "out"
 
 
+#TODO set column sizes dynamically
 required_fields = [
     'Comment',
     'Quantity',
