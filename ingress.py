@@ -236,7 +236,7 @@ def _parse_args():
         common.checkset_env('DIGIKEY_CLIENT_ID', args.id, 'Digikey client ID')
         common.checkset_env('DIGIKEY_CLIENT_SECRET', args.secret, 'Digikey client secret')
     elif args.distributor == 'mouser':
-        common.checkset_env('MOUSER_API_KEY', args.key, 'Mouser API key')
+        common.checkset_env('MOUSER_PART_API_KEY', args.key, 'Mouser API key')
 
     return main(args)
 

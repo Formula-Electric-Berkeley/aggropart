@@ -50,7 +50,8 @@ item_fields = {
 
 
 def _item_metavals(parser: bs4.BeautifulSoup) -> bs4.ResultSet:
-    return parser.find_all("dd", {"data-v-293164dd": True})
+    #TODO fix this; the data-v-XXXX tag changes periodically
+    return parser.find_all('dd', {'data-v-6e69987b': True})
 
 
 def _find_by_class(parser, classname, tag='div'):
@@ -70,6 +71,9 @@ def search_items(keyword):
 
 
 def get_item(part_number: str) -> dict:
+    if len(part_number) == 0:
+        # A blank part number is not a valid JLC search
+        return {}
     url = f'https://jlcpcb.com/partdetail/{part_number}'
     req = urllib.request.urlopen(url)
     resp = req.read()

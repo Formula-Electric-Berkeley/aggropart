@@ -33,7 +33,7 @@ class PartSearcher:
                 return
             self._search_dk(query)
         elif src == 'Mouser':
-            if _check_missing_env('MOUSER_API_KEY', src):
+            if _check_missing_env('MOUSER_PART_API_KEY', src):
                 return
             self._search_mouser(query)
         elif src == 'JLCPCB':
@@ -84,7 +84,7 @@ class PartSearcher:
             fmt_items = [list((fmt_func(item) if fmt_func else item).values()) for item in resp]
             self._update_gui(fmt_items, fields)
         else:
-            sel_row = gui.get_selected_table_row(self.rbom_table)
+            sel_row = self.rbom_table.get_selected_row()
             if not sel_row:
                 popups.error('No RBOM row was selected')
                 return

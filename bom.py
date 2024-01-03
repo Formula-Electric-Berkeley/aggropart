@@ -13,7 +13,7 @@ OUT_FOLDER = "out"
 
 
 required_fields = [
-    'Name',
+    'Comment',
     'Quantity',
     'Digi-Key Part Number',
     'Mouser Part Number',
@@ -74,7 +74,7 @@ def open_(values, rbom_table, pbom_subtables):
             for field in altium_fields:
                 raw_item = item.get(field, str())
                 if field == 'Quantity':
-                    bom_item.append(str(int(raw_item) * bom_qty))
+                    bom_item.append(int(raw_item) * bom_qty)
                 else:
                     bom_item.append(raw_item)
             bom_values.append(bom_item)

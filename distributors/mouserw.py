@@ -62,7 +62,7 @@ def get_item(part_number):
 
 
 def make_req_url(endpoint):
-    return f'https://api.mouser.com{endpoint}?apiKey={os.environ["MOUSER_API_KEY"]}&version=1'
+    return f'https://api.mouser.com{endpoint}?apiKey={os.environ["MOUSER_PART_API_KEY"]}&version=1'
 
 
 def format_item(item):
