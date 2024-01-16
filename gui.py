@@ -20,6 +20,15 @@ _event_registry = []
 _current_tab = 'Inventory'
 #TODO add PEP8 linter to this project (+checkstyle)
 #TODO move non-gui util files into util directory (difficult bc dependencies)
+#TODO add autosave
+#TODO make the search less bad (or perhaps the "part" option can have a selectable field)
+#TODO make links clickable
+#TODO get rid of the "SSEL" from right click menu
+#TODO add right click copy to top menu
+#TODO have pbom show qty has, qty will use (i.e. separate)
+#TODO only make item assoc-able if there is enough in SSEL
+#TODO add an "ignore" SSEL category
+#TODO make an "aggregate" mode for multiple BOMs (def behavior is to clear all)
 
 
 class RegistryEvent:
