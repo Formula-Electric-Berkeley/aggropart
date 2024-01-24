@@ -6,10 +6,14 @@ Automatically queries, inventories, and labels items purchased from Digikey and 
 import argparse
 import os
 import sys
+import time
 
 from PIL import Image, ImageDraw, ImageFont
+import pyautogui
 from pystrich.datamatrix import DataMatrixEncoder
 import segno
+from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 import common
 import inventory
@@ -17,6 +21,7 @@ from distributors import digikeyw, mouserw
 #TODO get rid of Consolas ttf in repo
 
 
+PRINT_TIMEOUT_SEC = 1.5
 PX_PER_IN = 203 #8 DPI
 LABEL_W_PX = int(PX_PER_IN * 2.25)
 LABEL_H_PX = PX_PER_IN * 4
@@ -29,31 +34,66 @@ LABEL_PDF_FN = 'labels.pdf'
 
 
 def main(args):
+    if args.ingress_type == 'order':
+        return ingress_order(args)
+    elif args.ingress_type == 'part':
+        return ingress_part(args)
+    else:
+        raise ValueError(f'Invalid ingress type: {args.ingress_type}')
+
+
+def ingress_order(args):
     # Get items from distributor corresponding to passed argument
     order_items = mouserw.get_order_items(args.order) if args.distributor == 'mouser' else digikeyw.get_order_items(args.order)
     order_items_std = [DistributorItem(args.distributor, item) for item in order_items]
     if len(order_items_std) == 0:
         print(f'No items were retrieved from the supplied {args.distributor} order ID {args.order}')
+    else:
+        return ingress_generic(order_items_std)
+    
 
+def ingress_part(args):
+    part_item = mouserw.get_item(args.part) if args.distributor == 'mouser' else digikeyw.get_item(args.part)
+    part_item_std = [DistributorItem(args.distributor, part_item)]
+    part_item_std[0].qty = args.quantity
+    ingress_generic(part_item_std, args.passive, args.box)
+    print_labels_auto()
+
+
+
+def print_labels_auto():
+    capabilities = DesiredCapabilities.CHROME
+    capabilities['goog:loggingPrefs'] = {'performance': 'ALL'}
+    driver = webdriver.Chrome(desired_capabilities=capabilities)
+
+    driver.get(f'{os.getcwd()}/{LABEL_PDF_FN}')
+    driver.execute_script('print()')
+    time.sleep(PRINT_TIMEOUT_SEC)
+    pyautogui.press('enter')
+    time.sleep(PRINT_TIMEOUT_SEC)
+    driver.close()
+
+
+def ingress_generic(items_std, swap_title_desc=False, box=None):
     # Query the EECS Box inventory, map names to page IDs, and filter out the qualifying words
     box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'])
     box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
 
     labels = []
-    for item in order_items_std:
-        common.pprint(item.to_dict())
-        resp = None
-        while True:
-            # Keep trying until a valid box is entered
-            resp = input('Which EECS Box should this go into? (ex XS0099, S0099, M0099 - leave blank to skip)? ')
-            if resp in box_inv:
-                break
-            else:
-                print(f'Box {resp} not in EECS inventory. Please try again.')
+    for item in items_std:
+        if not box or box not in box_inv:
+            common.pprint(item.to_dict())
+            while True:
+                # Keep trying until a valid box is entered
+                box = input('Which EECS Box should this go into? (ex XS0099, S0099, M0099 - leave blank to skip)? ')
+                if box in box_inv:
+                    break
+                else:
+                    print(f'Box {box} not in EECS inventory. Please try again.')
 
         # Process the item only if there was no user input
-        if len(resp) != 0:
-            props = make_props(item, box_inv[resp])
+        if len(box) != 0:
+            props = make_props(item, box_inv[box], swap_title_desc)
             notion_page = inventory.insert_db(properties=props)
 
             # Make data matrix and QR images, then save to temporary files
@@ -72,8 +112,8 @@ def main(args):
             label.append_blank(15)
             label.append_img(dm_img)
             label.append_img(qr_img)
-            label.append_blank(15)
-            label.append_text(item.mfg_part_num)
+            label.append_blank(10)
+            label.append_text(item.description if swap_title_desc else item.mfg_part_num)
             labels.append(label.dst)
 
             # Delete temporary data matrix and QR images
@@ -82,14 +122,16 @@ def main(args):
 
     # Save all the label images to a single PDF (considers 0 and 1 label edge cases)
     if len(labels) > 1:
-        labels[0].save(LABEL_PDF_FN, save_all=True, append_images=labels[1:])
+        labels[0].save(LABEL_PDF_FN, save_all=True, append_images=labels[1:], resolution=PX_PER_IN)
     elif len(labels) > 0:
-        labels[0].save(LABEL_PDF_FN)
+        labels[0].save(LABEL_PDF_FN, resolution=PX_PER_IN)
+
 
 class DistributorItem:
     def __init__(self, distributor_name, item):
         """Represents an order (part) item from a distributor. Standardized set of properties."""
         self.distributor = distributor_name
+        self.qty = -1
         if distributor_name == 'digikey':
             self._digikey_fmt(item)
         elif distributor_name == 'mouser':
@@ -98,12 +140,19 @@ class DistributorItem:
             raise ValueError(f'Invalid distributor name: {distributor_name}')
 
     def _digikey_fmt(self, item):
-        self.mfg_part_num = item.manufacturer_part_number
-        self.dist_part_num = item.digi_key_part_number
-        self.description = item.product_description
-        self.qty = item.quantity
-        self.unit_price = item.unit_price
-        self.total_price = item.total_price
+        self.mfg_part_num = self._get_dk_prop(item, 'manufacturer_part_number')
+        self.dist_part_num = self._get_dk_prop(item, 'digi_key_part_number')
+        self.description = self._get_dk_prop(item, 'product_description')
+        self.qty = self._get_dk_prop(item, 'quantity')
+        self.unit_price = self._get_dk_prop(item, 'unit_price')
+        self.total_price = self._get_dk_prop(item, 'total_price')
+
+    def _get_dk_prop(self, item, prop):
+        # Some properties do not exist for part ingress
+        if hasattr(item, prop):
+            return eval(f'item.{prop}')
+        else:
+            return -1
 
     def _mouser_fmt(self, item):
         self.mfg_part_num = item['ProductInfo']['ManufacturerPartNumber']
@@ -125,14 +174,14 @@ class DistributorItem:
         }
 
 
-def make_props(item, box_id):
+def make_props(item, box_id, swap_title_desc):
     """Create a properties dict according to the Notion inventory schema."""
     return {
         'Part Number': {
             "id": "title",
             "type": "title",
             "title": [
-                make_rich_text_prop(item.mfg_part_num)
+                make_rich_text_prop(item.description if swap_title_desc else item.mfg_part_num)
             ]
         },
         'Current Quantity': {
@@ -140,7 +189,7 @@ def make_props(item, box_id):
         },
         'Description': {
             "rich_text": [
-                make_rich_text_prop(item.description)
+                make_rich_text_prop(item.mfg_part_num if swap_title_desc else item.description)
             ]
         },
         'Box': {
@@ -190,6 +239,14 @@ class ImageBuilder:
         if text_width > LABEL_W_PX:
             # Text is too big for label; split into two hstacked lines of text
             cutoff_idx = len(msg) // 2
+
+            # If cutoff character is not a space, try the ones next to it
+            if msg[cutoff_idx] != ' ':
+                if (cutoff_idx + 1) < len(msg) and msg[cutoff_idx + 1] == ' ':
+                    cutoff_idx += 1
+                elif (cutoff_idx - 1) >= 0 and msg[cutoff_idx - 1] == ' ':
+                    cutoff_idx -= 1
+                    
             self.append_text(msg[:cutoff_idx])
             self.append_blank(LABEL_FONT_SIZE // 2)
             self.append_text(msg[cutoff_idx:])
@@ -221,15 +278,27 @@ def open_and_scale_img(fn, scale, scale_is_height):
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
-    distributors = parser.add_subparsers(dest='distributor', help='distributor source for the passed sales order number', required=True)
+    subparsers = parser.add_subparsers(dest='ingress_type', help='ingress for a single part or full order', required=True)
 
-    dist_digikey = distributors.add_parser('digikey')
-    dist_digikey.add_argument('--id', '-i', help='Digikey client ID; required if not specified in .env')
-    dist_digikey.add_argument('--secret', '-s', help='Digikey client secret; required if not specified in .env')
+    ingress_part = subparsers.add_parser('part')
+    ingress_order = subparsers.add_parser('order')
 
-    dist_mouser = distributors.add_parser('mouser')
-    dist_mouser.add_argument('--key', '-k', help='Mouser API key; required if not specified in .env')
+    for x in (ingress_part, ingress_order):
+        distributors = x.add_subparsers(dest='distributor', help='distributor source for the passed sales order number', required=True)
+
+        dist_digikey = distributors.add_parser('digikey')
+        dist_digikey.add_argument('--id', '-i', help='Digikey client ID; required if not specified in .env')
+        dist_digikey.add_argument('--secret', '-s', help='Digikey client secret; required if not specified in .env')
+
+        dist_mouser = distributors.add_parser('mouser')
+        dist_mouser.add_argument('--key', '-k', help='Mouser API key; required if not specified in .env')
+
+    ingress_part.add_argument('box', help='EECS box number (e.x. XS0001)')
+    ingress_part.add_argument('quantity', type=int, help='quantity')
+    ingress_part.add_argument('part', help='Digikey or Mouser P/N (not manufacturer)')
+    ingress_part.add_argument('-p', '--passive', action='store_true', default=False, help='passive component; swap description and title')
+
+    ingress_order.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
 
     args = parser.parse_args()
 
@@ -237,7 +306,8 @@ def _parse_args():
         common.checkset_env('DIGIKEY_CLIENT_ID', args.id, 'Digikey client ID')
         common.checkset_env('DIGIKEY_CLIENT_SECRET', args.secret, 'Digikey client secret')
     elif args.distributor == 'mouser':
-        common.checkset_env('MOUSER_PART_API_KEY', args.key, 'Mouser API key')
+        common.checkset_env('MOUSER_SEARCH_API_KEY', args.key, 'Mouser search API key')
+        common.checkset_env('MOUSER_ORDER_API_KEY', args.key, 'Mouser order API key')
 
     return main(args)
 
