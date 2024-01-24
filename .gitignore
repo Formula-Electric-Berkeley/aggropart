@@ -7,3 +7,4 @@ out/*
 venv/*
 .idea/*
 **/*.pdf
+**/*.png

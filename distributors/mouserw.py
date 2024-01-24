@@ -28,7 +28,7 @@ fake_response_item = {
 
 
 def get_order_items(order_id):
-    url = make_req_url('/api/v1/orderhistory/salesOrderNumber') + f"&salesOrderNumber={order_id}"
+    url = make_req_url('/api/v1/orderhistory/salesOrderNumber', True) + f"&salesOrderNumber={order_id}"
     resp = requests.get(url=url, timeout=TIMEOUT)
     return [] if resp.status_code != 200 else resp.json()['OrderLines']
 
@@ -61,8 +61,9 @@ def get_item(part_number):
         return fake_response_item
 
 
-def make_req_url(endpoint):
-    return f'https://api.mouser.com{endpoint}?apiKey={os.environ["MOUSER_PART_API_KEY"]}&version=1'
+def make_req_url(endpoint, order_req=False):
+    key = os.environ['MOUSER_ORDER_API_KEY' if order_req else 'MOUSER_PART_API_KEY']
+    return f'https://api.mouser.com{endpoint}?apiKey={key}&version=1'
 
 
 def format_item(item):
