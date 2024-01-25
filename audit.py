@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automatically queries, inventories, and labels items purchased from Digikey and Mouser.
+TODO description
 """
 
 import argparse
@@ -12,20 +12,26 @@ import inventory
 
 from distributors import digikeyw
 
-#TODO program that tallies items for a box: # of bags, # of items (i.e 100 resistors in a bag = 100 items), total price
-
 
 def main(args):
+    total_containers = 0
+    total_items = 0
+
     if len(args.boxes) == 0:
         item_inv = inventory.list_db(inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID']))
-        total_value = calculate_value(item_inv)
-        print(f'***** Total value of all items in EECS inventory: ${total_value} *****')
+        if args.count:
+            total_containers = len(item_inv)
+            total_items = sum([item['Quantity'] for item in item_inv])
+            print(f'***** Total number of items in EECS inventory: {total_items} ({total_containers} containers) *****')
+        else:
+            total_value = calculate_value(item_inv)
+            print(f'***** Total value of all items in EECS inventory: ${total_value} *****')
     else:
         item_inv = inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID'])
         box_inv = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'], force_refresh=True)
         all_box_titles = [get_box_title(v) for v in box_inv]
         selected_item_inv = []
-
+        
         for desired_box_title in args.boxes:
             desired_box_title = f'EECS Box {desired_box_title}'
             if desired_box_title not in all_box_titles:
@@ -33,18 +39,33 @@ def main(args):
                 continue
 
             for box in box_inv:
-                if get_box_title(box) == desired_box_title:
+                box_title = get_box_title(box)
+                if box_title == desired_box_title:
                     raw_relations = inventory.get_page_property(box['id'], 'RBxL')
                     relations = [v['relation']['id'] for v in raw_relations['results']]
-                    print(f'Number of items in box {get_box_title(box)}: {len(relations)}')
+                    print(f'Number of containers in box {box_title}: {len(relations)}')
+                    total_containers += len(relations)
+
+                    items_in_box = 0
                     for r in relations:
                         item = find_item_by_id(item_inv, r)
                         if item is not None:
+                            items_in_box += get_item_qty(item)
                             selected_item_inv.append(item)
+                    print(f'Number of items in box {box_title}: {items_in_box}')
+                    total_items += items_in_box
                     break
-                    
-        total_value = calculate_value(inventory.list_db(selected_item_inv))
-        print(f'***** Total value of items in EECS box(es) {", ".join(args.boxes)}: ${total_value} *****')
+        
+        if args.count:
+            print(f'***** Total number of items in EECS box(es) {", ".join(args.boxes)}: {total_items} ({total_containers} containers) *****')
+        else:
+            total_value = calculate_value(inventory.list_db(selected_item_inv))
+            print(f'***** Total value of items in EECS box(es) {", ".join(args.boxes)}: ${total_value} *****')
+
+
+def get_item_qty(item, default=0):
+    qty = item['properties']['Current Quantity']['number']
+    return qty if qty is not None else default
 
 
 def get_box_title(box):
@@ -63,7 +84,7 @@ def calculate_value(inv):
         part_num = item['Part Number']
         if part_num.startswith('CAP ') or part_num.startswith('RES '):
             # Part Number (title) and description are swapped for passives
-            part_num = item['Description']
+            part_num = item['Description'] if len(item['Description']) > 0 else part_num
         dk_query = digikeyw.search_items(part_num)
         if len(dk_query.exact_manufacturer_products) > 0:
             dk_part = dk_query.exact_manufacturer_products[0]
@@ -75,6 +96,7 @@ def calculate_value(inv):
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-c', '--count', action='store_true', help='count items only, do not query value')
     parser.add_argument('boxes', nargs='*', help='EECS box names to audit (e.x. XS0001)')
 
     args = parser.parse_args()
