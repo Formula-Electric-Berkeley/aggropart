@@ -64,6 +64,10 @@ def get_page(page_id: str, client: NotionClient = create_client(),
     return value
 
 
+def get_page_property(page_id: str, property_id: str, client: NotionClient = create_client()):
+    return client.pages.properties.retrieve(page_id, property_id)
+
+
 def get_db(db_id: str = os.environ['NOTION_INV_DB_ID'], client: NotionClient = create_client(),
            force_refresh: bool = False, silent: bool = False) -> dict:
     """Get the specified database content by querying the Notion API."""
