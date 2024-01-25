@@ -85,7 +85,11 @@ def calculate_value(inv):
         if part_num.startswith('CAP ') or part_num.startswith('RES '):
             # Part Number (title) and description are swapped for passives
             part_num = item['Description'] if len(item['Description']) > 0 else part_num
+        if len(part_num) == 0:
+            continue
         dk_query = digikeyw.search_items(part_num)
+        if dk_query is None:
+            continue
         if len(dk_query.exact_manufacturer_products) > 0:
             dk_part = dk_query.exact_manufacturer_products[0]
             item_value = round(dk_part.unit_price * item['Quantity'], 4)
