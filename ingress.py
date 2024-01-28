@@ -13,7 +13,6 @@ import pyautogui
 from pystrich.datamatrix import DataMatrixEncoder
 import segno
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 import common
 import inventory
@@ -45,7 +44,7 @@ def main(args):
 def ingress_order(args):
     # Get items from distributor corresponding to passed argument
     order_items = mouserw.get_order_items(args.order) if args.distributor == 'mouser' else digikeyw.get_order_items(args.order)
-    order_items_std = [DistributorItem(args.distributor, item) for item in order_items]
+    order_items_std = [DistributorItem(args.distributor, item, 'order') for item in order_items]
     if len(order_items_std) == 0:
         print(f'No items were retrieved from the supplied {args.distributor} order ID {args.order}')
     else:
@@ -54,7 +53,7 @@ def ingress_order(args):
 
 def ingress_part(args):
     part_item = mouserw.get_item(args.part) if args.distributor == 'mouser' else digikeyw.get_item(args.part)
-    part_item_std = [DistributorItem(args.distributor, part_item)]
+    part_item_std = [DistributorItem(args.distributor, part_item, 'part')]
     part_item_std[0].qty = args.quantity
     ingress_generic(part_item_std, args.passive, args.box)
     print_labels_auto()
@@ -62,10 +61,7 @@ def ingress_part(args):
 
 
 def print_labels_auto():
-    capabilities = DesiredCapabilities.CHROME
-    capabilities['goog:loggingPrefs'] = {'performance': 'ALL'}
-    driver = webdriver.Chrome(desired_capabilities=capabilities)
-
+    driver = webdriver.Chrome()
     driver.get(f'{os.getcwd()}/{LABEL_PDF_FN}')
     driver.execute_script('print()')
     time.sleep(PRINT_TIMEOUT_SEC)
@@ -128,14 +124,17 @@ def ingress_generic(items_std, swap_title_desc=False, box=None):
 
 
 class DistributorItem:
-    def __init__(self, distributor_name, item):
+    def __init__(self, distributor_name, item, ingress_type):
         """Represents an order (part) item from a distributor. Standardized set of properties."""
         self.distributor = distributor_name
         self.qty = -1
         if distributor_name == 'digikey':
             self._digikey_fmt(item)
         elif distributor_name == 'mouser':
-            self._mouser_fmt(item)
+            if ingress_type == 'order':
+                self._mouser_order_fmt(item)
+            else:
+                self._mouser_part_fmt(item)
         else:
             raise ValueError(f'Invalid distributor name: {distributor_name}')
 
@@ -154,13 +153,23 @@ class DistributorItem:
         else:
             return -1
 
-    def _mouser_fmt(self, item):
+    def _mouser_order_fmt(self, item):
         self.mfg_part_num = item['ProductInfo']['ManufacturerPartNumber']
         self.dist_part_num = item['ProductInfo']['MouserPartNumber']
         self.description = item['ProductInfo']['PartDescription']
         self.qty = item['Quantity']
         self.unit_price = item['UnitPrice']
         self.total_price = item['ExtPrice']
+
+    def _mouser_part_fmt(self, item):
+        self.mfg_part_num = item['ManufacturerPartNumber']
+        self.dist_part_num = item['MouserPartNumber']
+        self.description = item['Description']
+        # These fields are unnecessary for part ingress
+        self.qty = 0
+        self.unit_price = 0
+        self.total_price = 0
+
 
     def to_dict(self):
         """Format the distributor item as a dictionary."""
@@ -306,7 +315,7 @@ def _parse_args():
         common.checkset_env('DIGIKEY_CLIENT_ID', args.id, 'Digikey client ID')
         common.checkset_env('DIGIKEY_CLIENT_SECRET', args.secret, 'Digikey client secret')
     elif args.distributor == 'mouser':
-        common.checkset_env('MOUSER_SEARCH_API_KEY', args.key, 'Mouser search API key')
+        common.checkset_env('MOUSER_PART_API_KEY', args.key, 'Mouser part API key')
         common.checkset_env('MOUSER_ORDER_API_KEY', args.key, 'Mouser order API key')
 
     return main(args)

@@ -18,7 +18,7 @@ def main(args):
     total_items = 0
 
     if len(args.boxes) == 0:
-        item_inv = inventory.list_db(inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID']))
+        item_inv = inventory.list_db(inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID'], force_refresh=args.refresh))
         if args.count:
             total_containers = len(item_inv)
             total_items = sum([item['Quantity'] for item in item_inv])
@@ -27,7 +27,7 @@ def main(args):
             total_value = calculate_value(item_inv)
             print(f'***** Total value of all items in EECS inventory: ${total_value} *****')
     else:
-        item_inv = inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID'])
+        item_inv = inventory.get_db(db_id=os.environ['NOTION_INV_DB_ID'], force_refresh=args.refresh)
         box_inv = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'], force_refresh=True)
         all_box_titles = [get_box_title(v) for v in box_inv]
         selected_item_inv = []
@@ -94,13 +94,14 @@ def calculate_value(inv):
             dk_part = dk_query.exact_manufacturer_products[0]
             item_value = round(dk_part.unit_price * item['Quantity'], 4)
             total_value += item_value
-            print(f'Value of item {part_num}: ${dk_part.unit_price} x {item["Quantity"]} = {item_value}')
+            print(f'Value of item {part_num}: ${dk_part.unit_price} x {item["Quantity"]} = ${item_value}')
     return round(total_value, 2)
     
 
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-c', '--count', action='store_true', help='count items only, do not query value')
+    parser.add_argument('-r', '--refresh', action='store_true', default=False, help='force refresh the inventory')
     parser.add_argument('boxes', nargs='*', help='EECS box names to audit (e.x. XS0001)')
 
     args = parser.parse_args()

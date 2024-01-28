@@ -65,7 +65,13 @@ def get_page(page_id: str, client: NotionClient = create_client(),
 
 
 def get_page_property(page_id: str, property_id: str, client: NotionClient = create_client()):
-    return client.pages.properties.retrieve(page_id, property_id)
+    props = client.pages.properties.retrieve(page_id, property_id)
+    while props['has_more']:
+        props_next = client.pages.properties.retrieve(page_id, property_id, start_cursor=props['next_cursor'])
+        props['results'].extend(props_next['results'])
+        props['next_cursor'] = props_next['next_cursor']
+        props['has_more'] = props_next['has_more']
+    return props
 
 
 def get_db(db_id: str = os.environ['NOTION_INV_DB_ID'], client: NotionClient = create_client(),
