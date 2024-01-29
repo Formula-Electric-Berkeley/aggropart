@@ -48,14 +48,14 @@ def ingress_order(args):
     if len(order_items_std) == 0:
         print(f'No items were retrieved from the supplied {args.distributor} order ID {args.order}')
     else:
-        return ingress_generic(order_items_std)
+        return ingress_generic(order_items_std, force_refresh=args.refresh)
     
 
 def ingress_part(args):
     part_item = mouserw.get_item(args.part) if args.distributor == 'mouser' else digikeyw.get_item(args.part)
     part_item_std = [DistributorItem(args.distributor, part_item, 'part')]
     part_item_std[0].qty = args.quantity
-    ingress_generic(part_item_std, args.passive, args.box)
+    ingress_generic(part_item_std, swap_title_desc=args.passive, box=args.box, force_refresh=args.refresh)
     print_labels_auto()
 
 
@@ -70,9 +70,9 @@ def print_labels_auto():
     driver.close()
 
 
-def ingress_generic(items_std, swap_title_desc=False, box=None):
+def ingress_generic(items_std, swap_title_desc=False, box=None, force_refresh=False):
     # Query the EECS Box inventory, map names to page IDs, and filter out the qualifying words
-    box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'])
+    box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'], force_refresh=force_refresh)
     box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
 
     labels = []
@@ -306,6 +306,7 @@ def _parse_args():
     ingress_part.add_argument('quantity', type=int, help='quantity')
     ingress_part.add_argument('part', help='Digikey or Mouser P/N (not manufacturer)')
     ingress_part.add_argument('-p', '--passive', action='store_true', default=False, help='passive component; swap description and title')
+    ingress_part.add_argument('-r', '--refresh', action='store_true', default=False, help='force refresh the inventory')
 
     ingress_order.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
 
