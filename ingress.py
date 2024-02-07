@@ -75,6 +75,7 @@ def ingress_generic(items_std, swap_title_desc=False, box=None, force_refresh=Fa
     box_inv_raw = inventory.get_db(db_id=os.environ['NOTION_BOX_DB_ID'], force_refresh=force_refresh)
     box_inv = {inventory._filter_inv_item(item, inventory.db_mappings['Part Number']).replace("EECS Box ", ""): item['id'] for item in box_inv_raw}
 
+    box_persist = box
     labels = []
     for item in items_std:
         if not box or box not in box_inv:
@@ -82,7 +83,7 @@ def ingress_generic(items_std, swap_title_desc=False, box=None, force_refresh=Fa
             while True:
                 # Keep trying until a valid box is entered
                 box = input('Which EECS Box should this go into? (ex XS0099, S0099, M0099 - leave blank to skip)? ')
-                if box in box_inv:
+                if box in box_inv or (box is not None and len(box) == 0):
                     break
                 else:
                     print(f'Box {box} not in EECS inventory. Please try again.')
@@ -115,6 +116,7 @@ def ingress_generic(items_std, swap_title_desc=False, box=None, force_refresh=Fa
             # Delete temporary data matrix and QR images
             os.remove(QR_IMG_FN)
             os.remove(DM_IMG_FN)
+        box = box_persist
 
     # Save all the label images to a single PDF (considers 0 and 1 label edge cases)
     if len(labels) > 1:
@@ -307,8 +309,10 @@ def _parse_args():
     ingress_part.add_argument('part', help='Digikey or Mouser P/N (not manufacturer)')
     ingress_part.add_argument('-p', '--passive', action='store_true', default=False, help='passive component; swap description and title')
     ingress_part.add_argument('-r', '--refresh', action='store_true', default=False, help='force refresh the inventory')
+    
 
     ingress_order.add_argument('order', help='Digikey SALES order ID or Mouser SALES order number (not web/invoice)')
+    ingress_order.add_argument('-r', '--refresh', action='store_true', default=False, help='force refresh the inventory')
 
     args = parser.parse_args()
 
