@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TODO description
+Audit the total value and/or number of parts/containers in any number of boxes of EECS inventory.
 """
 
 import argparse
@@ -103,7 +103,7 @@ def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-c', '--count', action='store_true', help='count items only, do not query value')
     parser.add_argument('-r', '--refresh', action='store_true', default=False, help='force refresh the inventory')
-    parser.add_argument('boxes', nargs='*', help='EECS box names to audit (e.x. XS0001)')
+    parser.add_argument('boxes', nargs='*', help='EECS box names to audit (e.x. XS0001); query all by default')
 
     args = parser.parse_args()
     return main(args)

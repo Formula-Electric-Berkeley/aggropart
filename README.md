@@ -83,16 +83,54 @@ current PBOM, click "Export Current PBOM" instead.
    time the Digikey search functionality is used.
 5. Run the GUI with `python3 gui.py`
 
+## Debugging
+aggropart logs all executions to `logs/` in the current working directory.
+
 ## Additional Functionality
 
 ### `ingress.py`
 
+Order mode:
 ```
-usage: ingress.py [-h] order {digikey,mouser} ...
-
-Automatically queries, inventories, and labels items purchased from Digikey and Mouser.
+usage: ingress.py order [-h] [-r] {digikey,mouser} ... order
 
 positional arguments:
-  order             Digikey SALES order ID or Mouser SALES order number (not web/invoice)
   {digikey,mouser}  distributor source for the passed sales order number
+  order             Digikey SALES order ID or Mouser SALES order number (not web/invoice)
+
+optional arguments:
+  -h, --help        show this help message and exit
+  -r, --refresh     force refresh the inventory
+```
+
+Part mode:
+```
+usage: ingress.py part [-h] [-p] [-r] {digikey,mouser} ... box quantity part
+
+positional arguments:
+  {digikey,mouser}  distributor source for the passed sales order number
+  box               EECS box number (e.x. XS0001)
+  quantity          quantity
+  part              Digikey or Mouser P/N (not manufacturer)
+
+optional arguments:
+  -h, --help        show this help message and exit
+  -p, --passive     passive component; swap description and title
+  -r, --refresh     force refresh the inventory
+```
+
+### `audit.py`
+
+```
+usage: audit.py [-h] [-c] [-r] [boxes [boxes ...]]
+
+Audit the total value and/or number of parts/containers in any number of boxes of EECS inventory.
+
+positional arguments:
+  boxes          EECS box names to audit (e.x. XS0001); query all by default
+
+optional arguments:
+  -h, --help     show this help message and exit
+  -c, --count    count items only, do not query value
+  -r, --refresh  force refresh the inventory
 ```
