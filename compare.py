@@ -7,7 +7,8 @@ import argparse
 import sys
 
 #TODO write comparison per part between Digikey and Mouser to find optimal split. 
-# support theoretical discounts and mouser quotes; 
+# support theoretical discounts and mouser quotes;
+# integrate with aggropart GUI (eventually)
 
 def _parse_args():
     pass

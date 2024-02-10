@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import traceback
 
 import dotenv
 
@@ -47,7 +48,7 @@ def checkset_env(key: str, arg: str, designator: str) -> None:
 
 
 def _exception_logging_handler(type, value, tb):
-    logging.exception("Uncaught exception: {0}".format(str(value)))
+    logging.exception(f'Uncaught {type.__name__}: {value}\n{"".join(traceback.format_tb(tb))}')
     sys.__excepthook__(type, value, tb)
 
 

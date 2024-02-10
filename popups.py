@@ -41,18 +41,18 @@ def confirm(msg):
     layout = [[
         psg.Text(msg), 
         psg.Button(button_text='Yes', key='-YES-'),
-        psg.Button(button_text='Yes', key='-NO-')
+        psg.Button(button_text='No', key='-NO-')
     ]]
     
     window = psg.Window('aggropart-confirm', layout, modal=True, grab_anywhere=True, finalize=True)
-    window['-IPT-'].bind('<Return>', 'ENTER-')
+    window['-YES-'].bind('<Return>', 'ENTER-')
 
     while True:
         event, _ = window.read()
         if event == psg.WIN_CLOSED or event == 'Exit' or event == '-CANCEL-':
             window.close()
             return False
-        elif event == '-YES-':
+        elif event == '-YES-' or event == '-YES-ENTER-':
             window.close()
             return True
         elif event == '-NO-':

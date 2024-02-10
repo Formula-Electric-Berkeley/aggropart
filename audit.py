@@ -13,6 +13,7 @@ import inventory
 from distributors import digikeyw
 
 
+#TODO integrate audit into aggropart gui
 def main(args):
     total_containers = 0
     total_items = 0

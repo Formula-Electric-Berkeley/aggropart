@@ -6,6 +6,7 @@ TODO add description
 import csv
 import logging
 import os
+import webbrowser
 
 import pyperclip
 import PySimpleGUI as psg
@@ -23,13 +24,12 @@ _current_tab = 'Inventory'
 #TODO move non-gui util files into util directory (difficult bc dependencies)
 #TODO add autosave
 #TODO make the search less bad (or perhaps the "part" option can have a selectable field)
-#TODO make links clickable
-#TODO get rid of the "SSEL" from right click menu
-#TODO add right click copy to top menu
+#TODO add right click copy to top menu (difficult bc of use of optional_key to remove table names from right click menu)
 #TODO have pbom show qty has, qty will use (i.e. separate)
 #TODO only make item assoc-able if there is enough in SSEL
 #TODO add an "ignore" SSEL category
 #TODO make an "aggregate" mode for multiple BOMs (def behavior is to clear all)
+#TODO item in menu to change the inventory cache refresh time
 
 
 class RegistryEvent:
@@ -48,8 +48,9 @@ class SectionTable:
     def __init__(self, headings, key, name):
         self.key = key
         self.name = name
-        self._cell_copy_str = f'Copy Selected Cell'
-        self._row_copy_str = f'Copy Selected Row as CSV'
+        self._cell_copy_str = f'Copy Selected Cell::{name}'
+        self._row_copy_str = f'Copy Selected Row as CSV::{name}'
+        self._ctrlc_event_id = f'-{self.name}-CTRLC-'
         self.table = psg.Table(
             headings=headings,
             values=[],
@@ -59,10 +60,11 @@ class SectionTable:
             hide_vertical_scroll=False,
             vertical_scroll_only=False,
             right_click_menu=['', [self._cell_copy_str, self._row_copy_str]],
-            enable_click_events=True
+            enable_click_events=True,
+            right_click_selects=True
         )
-        self.row = 0
-        self.col = 0
+        self.row = -1
+        self.col = -1
         self._bound = False
 
     def _click_matcher(self, event, other):
@@ -82,10 +84,20 @@ class SectionTable:
             c = self._get_inner(event, 2, 1)
             if isinstance(r, int) and isinstance(c, int) and r >= 0 and c >= 0:
                 self.row, self.col = event[2]
+                window.bind('<Control-C>', self._ctrlc_event_id)
+                window.bind('<Control-c>', self._ctrlc_event_id)
+                self._trigger_hyperlink()
+
+    def _trigger_hyperlink(self):
+        cell_value = self.get_selected_cell_value()
+        if type(cell_value) == str and cell_value.startswith('https://'):
+            if popups.confirm(f'Do you want to proceed to {cell_value}?'):
+                webbrowser.open_new_tab(cell_value)
 
     def _row_copy_action(self):
         row = self.get_selected_row(fmt=False)
-        if not row:
+        if row is None:
+            popups.error('No row selected to copy')
             return
         elif hasattr(row, '__iter__'):
             # Convert all cells to str; some elements are int
@@ -96,14 +108,22 @@ class SectionTable:
             # A list is expected, so this is primarily for futureproofing
             pyperclip.copy(row)
 
+    def _cell_copy_action(self):
+        cell_value = self.get_selected_cell_value()
+        if cell_value is not None:
+            pyperclip.copy(cell_value)
+        else:
+            popups.error('No cell selected to copy')
+            return
+
     def bind_click_events(self):
         if self._bound:
             return
-        #TODO add ctrl-c copying of selected cell
         # Format for a click event is: (key, '+CLICKED+', (row, col))
         RegistryEvent((f'{self.key}', '+CLICKED+'), self._update_pos, self._click_matcher, pass_event=True)
-        RegistryEvent(self._cell_copy_str, lambda: pyperclip.copy(self.get_selected_cell_value()))
+        RegistryEvent(self._cell_copy_str, self._cell_copy_action)
         RegistryEvent(self._row_copy_str, self._row_copy_action)
+        RegistryEvent(self._ctrlc_event_id, self._cell_copy_action)
         self._bound = True
 
     def get_selected_row(self, fmt=True):
@@ -114,7 +134,10 @@ class SectionTable:
             return {k: sel_table_row[i] for i, k in enumerate(self.ColumnHeadings)} if fmt else sel_table_row
         
     def get_selected_cell_value(self):
-        return self.Values[self.row][self.col]
+        if self.row >= 0 and self.col >= 0 and \
+                len(self.Values) > self.row and \
+                len(self.Values[self.row]) > self.col:
+            return self.Values[self.row][self.col]
         
     def update_values(self, values):
         self.table.update(values=values)
@@ -195,8 +218,9 @@ def _export_all_pboms():
 
 
 def _find_row_qty(table, search_terms):
+    row = table.get_selected_row(fmt=False)
     for s in search_terms:
-        qty = table.Values[table.ColumnHeadings.index(s)] if s in table.ColumnHeadings else None
+        qty = row[table.ColumnHeadings.index(s)] if s in table.ColumnHeadings else None
         if qty is not None:
             return int(qty)
 
