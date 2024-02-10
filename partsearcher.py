@@ -32,7 +32,7 @@ class PartSearcher:
                 return
             self._search_dk(query)
         elif src == 'Mouser':
-            if _check_missing_env('MOUSER_SEARCH_API_KEY', src):
+            if _check_missing_env('MOUSER_PART_API_KEY', src):
                 return
             self._search_mouser(query)
         elif src == 'JLCPCB':
@@ -89,8 +89,9 @@ class PartSearcher:
                 return
             part_number = sel_row[row_key]
             item = get_item_func(part_number)
-            fmt_item = fmt_func(item) if fmt_func else item
-            self._update_gui([list(fmt_item.values())], fields)
+            if item:
+                fmt_item = fmt_func(item) if fmt_func else item
+                self._update_gui([list(fmt_item.values())], fields)
 
 
 def _search_inv_by_query(query, inv):

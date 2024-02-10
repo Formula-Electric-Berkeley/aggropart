@@ -47,8 +47,8 @@ class SectionTable:
     def __init__(self, headings, key, name):
         self.key = key
         self.name = name
-        self._cell_copy_str = f'Copy Selected {name} Cell'
-        self._row_copy_str = f'Copy Selected {name} Row as CSV'
+        self._cell_copy_str = f'Copy Selected Cell'
+        self._row_copy_str = f'Copy Selected Row as CSV'
         self.table = psg.Table(
             headings=headings,
             values=[],
@@ -178,7 +178,8 @@ def _clear_tables():
 
 def _export_pbom(src):
     table = pbom_subtables[src]
-    with open(f'{bom.OUT_FOLDER}/{src.lower()}_bom_{bom.loaded_filename}.csv', 'w', newline='') as fh:
+    fn = f'{bom.OUT_FOLDER}/{src.lower()}_bom_{bom.loaded_filename}.csv'
+    with open(fn, 'w', newline='', encoding='utf-8') as fh:
         writer = csv.writer(fh)
         writer.writerow(bom.altium_fields + [''] + table.ColumnHeadings)
         for part, item in zip(item_part_assoc_map[src], table.Values):
