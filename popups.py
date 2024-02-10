@@ -1,3 +1,5 @@
+import logging
+
 import PySimpleGUI as psg
 
 import common
@@ -26,11 +28,37 @@ github.com/Formula-Electric-Berkeley/aggropart
 
 
 def info(msg):
-    psg.PopupNoButtons(msg, title='aggropart')
+    logging.info(msg)
+    psg.PopupNoButtons(msg, title='aggropart-info')
 
 
 def error(err):
-    psg.Popup(err)
+    logging.error(err)
+    psg.Popup(err, title='aggropart-error')
+
+
+def confirm(msg):
+    layout = [[
+        psg.Text(msg), 
+        psg.Button(button_text='Yes', key='-YES-'),
+        psg.Button(button_text='Yes', key='-NO-')
+    ]]
+    
+    window = psg.Window('aggropart-confirm', layout, modal=True, grab_anywhere=True, finalize=True)
+    window['-IPT-'].bind('<Return>', 'ENTER-')
+
+    while True:
+        event, _ = window.read()
+        if event == psg.WIN_CLOSED or event == 'Exit' or event == '-CANCEL-':
+            window.close()
+            return False
+        elif event == '-YES-':
+            window.close()
+            return True
+        elif event == '-NO-':
+            window.close()
+            return False
+
 
 def input_(msg, tooltip=None, default=None, validator=(lambda v: True)):
     layout = [[
@@ -40,7 +68,7 @@ def input_(msg, tooltip=None, default=None, validator=(lambda v: True)):
         psg.Button(button_text='Cancel', key='-CANCEL-')
     ]]
     
-    window = psg.Window('aggropart', layout, modal=True, grab_anywhere=True, finalize=True)
+    window = psg.Window('aggropart-input', layout, modal=True, grab_anywhere=True, finalize=True)
     window['-IPT-'].bind('<Return>', 'ENTER-')
 
     while True:

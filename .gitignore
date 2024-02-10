@@ -4,6 +4,7 @@
 *.json
 *.badext
 out/*
+logs/*
 venv/*
 .idea/*
 **/*.pdf

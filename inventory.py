@@ -6,6 +6,7 @@ TODO add description
 import argparse
 import glob
 import os
+import logging
 import sys
 
 from notion_client import Client as NotionClient
@@ -26,7 +27,7 @@ db_mappings = {
 _db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
 _page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
 _client_inst = None
-common.init_dotenv()
+common.init_env()
 
 
 def _item_is_valid(item: dict) -> bool:
@@ -60,7 +61,7 @@ def get_page(page_id: str, client: NotionClient = create_client(),
 
     value, used_cached = _page_cache.get(page_id, updater, force_refresh)
     if used_cached and not silent:
-        print(f"Using cached Notion page for ID: {page_id}")
+        logging.info(f"Using cached Notion page for ID: {page_id}")
     return value
 
 
@@ -79,18 +80,18 @@ def get_db(db_id: str = os.environ['NOTION_INV_DB_ID'], client: NotionClient = c
     """Get the specified database content by querying the Notion API."""
     def updater(cache, key):
         if not silent:
-            print(f"Executing initial Notion DB query", flush=True)
+            logging.info(f"Executing initial Notion DB query", flush=True)
         query = client.databases.query(key, page_size=100)
         cache[key] = query['results']
         while query['has_more']:
             if not silent:
-                print(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+                logging.info(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
             query = client.databases.query(key, start_cursor=query['next_cursor'], page_size=100)
             cache[key].extend(query['results'])
 
     value, used_cached = _db_cache.get(db_id, updater, force_refresh)
     if used_cached and not silent:
-        print(f"Using cached Notion database for ID: {db_id}")
+        logging.info(f"Using cached Notion database for ID: {db_id}")
     return value
 
 
@@ -162,19 +163,19 @@ def _parse_args() -> str:
 def validate_args(args) -> str:
     common.checkset_env('NOTION_TOKEN', args.token, 'Notion token')
     common.checkset_env('NOTION_INV_DB_ID', args.dbid, 'Notion database ID')
-    common.init_dotenv()
+    common.init_env()
 
     if args.operation in ('list', 'search', 'update', 'insert'):
         db = get_db(force_refresh=args.refresh)
         if args.operation == 'list':
-            return common.pfmt(list_db(db))
+            common.pprint(list_db(db))
         elif args.operation == 'search':
-            return common.pfmt(search_db(args.query, db))
+            common.pprint(search_db(args.query, db))
         elif args.operation == 'update':
-            return common.pfmt(update_db(args.query, args.quantity, args.mode, db))
+            common.pprint(update_db(args.query, args.quantity, args.mode, db))
         elif args.operation == 'insert':
             # TODO fix this
-            return common.pfmt(insert_db(args.part_number, args.quantity, args.description, db))
+            common.pprint(insert_db(args.part_number, args.quantity, args.description, db))
     else:
         raise ValueError(f'"{args.operation}" was not recognized as a valid operation')
 

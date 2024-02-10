@@ -58,7 +58,7 @@ def get_item(part_number):
     if 'SearchResults' in resp_json and resp_json['SearchResults']:
         return resp_json['SearchResults']['Parts'][0]
     else:
-        return fake_response_item
+        return None
 
 
 def make_req_url(endpoint, order_req=False):

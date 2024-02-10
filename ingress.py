@@ -53,6 +53,9 @@ def ingress_order(args):
 
 def ingress_part(args):
     part_item = mouserw.get_item(args.part) if args.distributor == 'mouser' else digikeyw.get_item(args.part)
+    if part_item is None:
+        print(f'Part was not retrieved from the supplied {args.distributor} part number {args.part}')
+        return
     part_item_std = [DistributorItem(args.distributor, part_item, 'part')]
     part_item_std[0].qty = args.quantity
     ingress_generic(part_item_std, swap_title_desc=args.passive, box=args.box, force_refresh=args.refresh)
@@ -327,5 +330,5 @@ def _parse_args():
 
 
 if __name__ == "__main__":
-    common.init_dotenv()
+    common.init_env()
     sys.exit(_parse_args())

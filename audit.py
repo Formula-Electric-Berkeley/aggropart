@@ -109,5 +109,5 @@ def _parse_args():
 
 
 if __name__ == "__main__":
-    common.init_dotenv()
+    common.init_env()
     sys.exit(_parse_args())

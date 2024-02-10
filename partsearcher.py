@@ -40,9 +40,7 @@ class PartSearcher:
 
     def _update_gui(self, values, headings):
         self.ssel_table.update_values(values)
-        padded_headings = headings + [''] * (len(bom.search_fields) - len(headings))
-        for cid, text in zip(bom.search_fields, padded_headings):
-            self.ssel_table.Widget.heading(cid, text=text)
+        self.ssel_table.update_headings(headings)
 
     def update_gui_queued(self):
         if len(self.update_queue) > 0:
@@ -92,6 +90,9 @@ class PartSearcher:
             if item:
                 fmt_item = fmt_func(item) if fmt_func else item
                 self._update_gui([list(fmt_item.values())], fields)
+            else:
+                popups.error('SSEL request failed or had invalid RBOM input data')
+                return
 
 
 def _search_inv_by_query(query, inv):

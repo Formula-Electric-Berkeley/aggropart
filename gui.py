@@ -4,6 +4,7 @@ TODO add description
 """
 
 import csv
+import logging
 import os
 
 import pyperclip
@@ -121,6 +122,12 @@ class SectionTable:
     def clear_values(self):
         self.update_values([])
 
+    def update_headings(self, headings):
+        # ColumnHeadings property is final
+        padded_headings = headings + [''] * (len(self.ColumnHeadings) - len(headings))
+        for cid, text in zip(self.ColumnHeadings, padded_headings):
+            self.table.Widget.heading(cid, text=text)
+
     @property
     def Values(self):
         return self.table.Values
@@ -132,10 +139,6 @@ class SectionTable:
     @property
     def SelectedRows(self):
         return self.table.SelectedRows
-    
-    @property
-    def Widget(self):
-        return self.table.Widget
 
 
 def _register_all_events():
@@ -191,6 +194,13 @@ def _export_all_pboms():
         _export_pbom(src)
 
 
+def _find_row_qty(table, search_terms):
+    for s in search_terms:
+        qty = table.Values[table.ColumnHeadings.index(s)] if s in table.ColumnHeadings else None
+        if qty is not None:
+            return int(qty)
+
+
 def _assoc_item_part():
     #TODO check quantity requested by RBOM against SSEL
     rbom_row = rbom_table.get_selected_row(fmt=False)
@@ -204,6 +214,13 @@ def _assoc_item_part():
     if not searcher.last_src or searcher.last_src not in pbom_subtables:
         popups.error('Search was never performed')
         return
+    
+    rbom_qty = _find_row_qty(rbom_table, ('Quantity',))
+    ssel_qty = _find_row_qty(ssel_table, ('Quantity Available', 'Stock'))
+
+    if rbom_qty is not None and ssel_qty is not None and rbom_qty > ssel_qty:
+        if not popups.confirm(f'Source quantity {ssel_qty} is less than BOM quantity {rbom_qty}. Proceed anyways?'):
+            return
 
     pbom_table = pbom_subtables[searcher.last_src]
     new_rbom_values = rbom_table.Values
@@ -310,7 +327,7 @@ def _pack_frame(name):
 
 
 if __name__ == "__main__":
-    common.init_dotenv()
+    common.init_env()
     os.makedirs(bom.OUT_FOLDER, exist_ok=True)
 
     rbom_table = SectionTable(bom.altium_fields, '-RBOM-TABLE-', 'RBOM')
@@ -322,6 +339,7 @@ if __name__ == "__main__":
         'JLCPCB': SectionTable(bom.jlc_fields, '-JLC-TABLE-', 'JLCPCB')
     }
     item_part_assoc_map = {k: [] for k in pbom_subtables.keys()}
+    logging.info('All tables initialized')
 
     search_query_input = psg.Input(s=15, tooltip='Query', key='-SEARCH-QUERY-',
                                    disabled=True, disabled_readonly_background_color='#9c9c9c')
@@ -331,16 +349,20 @@ if __name__ == "__main__":
     _pack_frame('-RBOM-FRAME-')
     _pack_frame('-SSEL-FRAME-')
     _pack_frame('-PBOM-FRAME-')
+    logging.info('Main window created and frames packed')
 
     searcher = partsearcher.PartSearcher(window, rbom_table, ssel_table)
+    logging.info('PartSearcher initialized')
 
     _register_all_events()
     _bind_table_clicks()
+    logging.info('All events registered')
 
     while True:
         event, values = window.read()
         if event != '__TIMEOUT__':
-            print(event, values)
+            logging.info(f'Event triggered: {event}')
+            logging.debug(values)
         if event == psg.WIN_CLOSED or event == 'Exit':
             break
 
@@ -348,6 +370,8 @@ if __name__ == "__main__":
             if r_event == event:
                 if r_event.pass_event:
                     r_event.func(event)
+                    logging.info(f'Event finished: {event}')
                 else:
                     r_event.func()
+                    logging.info(f'Event finished: {event}')
                 break
