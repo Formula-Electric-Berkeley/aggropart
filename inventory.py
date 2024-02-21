@@ -14,20 +14,25 @@ from notion_client import Client as NotionClient
 import common
 from cache import Cache
 
+
 db_mappings = {
     'Part Number': 'db["properties"]["Part Number"]["title"][0]["plain_text"]',
     'Quantity': 'db["properties"]["Current Quantity"]["number"]',
     'Description': 'db["properties"]["Description"]["rich_text"][0]["plain_text"]',
-    'Box': 'get_page(db["properties"]["Box"]["relation"][0]["id"], silent=True)'
-           '["properties"]["Part Number"]["title"][0]["plain_text"]',
+    'Box': '_filter_box_property(db)',
     'URL': 'db["url"]'
 }
-# TODO make the box field use the box inventory database instead of retrieving all box pages
 
 _db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
 _page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
 _client_inst = None
 common.init_env()
+
+
+def _filter_box_property(db):
+    for item in get_db(os.environ['NOTION_BOX_DB_ID']):
+        if db['properties']['Box']['relation'][0]['id'] == item['id']:
+            return item['properties']['Part Number']['title'][0]['plain_text']
 
 
 def _item_is_valid(item: dict) -> bool:
@@ -80,12 +85,12 @@ def get_db(db_id: str = os.environ['NOTION_INV_DB_ID'], client: NotionClient = c
     """Get the specified database content by querying the Notion API."""
     def updater(cache, key):
         if not silent:
-            logging.info(f"Executing initial Notion DB query", flush=True)
+            logging.info(f"Executing initial Notion DB query")
         query = client.databases.query(key, page_size=100)
         cache[key] = query['results']
         while query['has_more']:
             if not silent:
-                logging.info(f"Executing Notion DB query with cursor: {query['next_cursor']}", flush=True)
+                logging.info(f"Executing Notion DB query with cursor: {query['next_cursor']}")
             query = client.databases.query(key, start_cursor=query['next_cursor'], page_size=100)
             cache[key].extend(query['results'])
 
