@@ -11,6 +11,7 @@ import webbrowser
 import pyperclip
 import PySimpleGUI as psg
 
+import audit
 import bom
 import common
 import inventory
@@ -180,8 +181,19 @@ def _register_all_events():
     RegistryEvent('-EXPORT-C-PBOM-', lambda: _export_pbom(_current_tab))
     RegistryEvent('Export All PBOMs', _export_all_pboms)
     RegistryEvent('-EXPORT-A-PBOM-', _export_all_pboms)
-    RegistryEvent('Clear Inventory Cache', inventory.clear_caches)
     RegistryEvent('Clear All Tables', _clear_tables)
+
+    RegistryEvent('Clear Cache::Inventory', inventory.clear_caches)
+    RegistryEvent('Export to JSON::Inventory', lambda: False) #TODO
+    RegistryEvent('Insert Item::Inventory', lambda: False) #TODO
+    RegistryEvent('Count All Items', lambda: popups.info(audit.all_boxes(count=True)))
+    RegistryEvent('Query All Value', lambda: popups.info(audit.all_boxes(count=False)) if
+                  popups.confirm('This action consumes A LOT of Digikey API requests.'
+                                 ' There is a daily limit of 1000. Are you sure you want to continue?') else None)
+    RegistryEvent('Count Box Items', lambda: audit.selected_boxes_gui(count=True))
+    RegistryEvent('Query Box Value', lambda: popups.info(audit.selected_boxes_gui(count=False)) if
+                  popups.confirm('This action consumes a significant number of Digikey API requests.'
+                                 ' There is a daily limit of 1000. Are you sure you want to continue?') else None)
 
     RegistryEvent('-INV-UPDATE-BEGIN-', lambda: search_updating_text.update(visible=True))
     RegistryEvent('-INV-UPDATE-END-', lambda: search_updating_text.update(visible=False))
@@ -330,9 +342,13 @@ def _make_window():
         ], key='-PBOM-FRAME-')
     ]
 
-    file_opts = ['Export Current PBOM', 'Export All PBOMs', 'Clear Inventory Cache', 'Clear All Tables']
+    file_opts = ['Export Current PBOM', 'Export All PBOMs', 'Clear All Tables']
+    advanced_inv_opts = ['Get Page by ID', 'Get Page Properties by ID', 'Get DB by ID']
+    audit_opts = ['Count All Items', 'Count Box Items', 'Query Box Value', 'Query All Value']
+    inventory_opts = ['Clear Cache::Inventory', 'Export to JSON::Inventory', 'Insert Item::Inventory', 
+                      'Audit', audit_opts, 'Advanced', advanced_inv_opts]
     help_opts = ['Instructions', 'Required BOM Fields', 'About aggropart']
-    menu = [psg.Menu([['File', file_opts], ['Help', help_opts]], key='-MENUBAR-', p=0)]
+    menu = [psg.Menu([['File', file_opts], ['Inventory', inventory_opts], ['Help', help_opts]], key='-MENUBAR-', p=0)]
 
     layout = [menu, rbom_layout, ssel_layout, pbom_layout]
 
