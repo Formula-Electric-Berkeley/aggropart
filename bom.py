@@ -50,20 +50,12 @@ search_fields = [f'Placeholder{i}' for i in range(_field_maxlen)]
 loaded_filename = str()
 
 
-def _validate_int(v):
-    try:
-        _ = int(v)
-        return True
-    except:
-        popups.error('Value entered was not an integer')
-
-
 def open_(values, rbom_table, pbom_subtables):
     try:
         fp = values['-BOM-OPEN-']
         if not init(fp):
             return
-        bom_qty = popups.input_('BOM Quantity: ', default='1', validator=_validate_int)
+        bom_qty = popups.input_('BOM Quantity: ', default='1', validator=popups.validate_int)
         if not bom_qty:
             return
         bom_qty = int(bom_qty)

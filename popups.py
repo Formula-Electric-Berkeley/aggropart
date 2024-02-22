@@ -81,3 +81,10 @@ def input_(msg, tooltip=None, default=None, validator=(lambda v: True)):
                 window.close()
                 return values['-IPT-']
             
+
+def validate_int(v):
+    try:
+        _ = int(v)
+        return True
+    except:
+        error('Value entered was not an integer')

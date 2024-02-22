@@ -47,6 +47,10 @@ def checkset_env(key: str, arg: str, designator: str) -> None:
         logging.warning(f'WARNING: {designator} was specified but overridden by entry in .env')
 
 
+def set_env(key: str, value) -> None:
+    dotenv.set_key('.env', key, value)
+
+
 def _exception_logging_handler(type, value, tb):
     logging.exception(f'Uncaught {type.__name__}: {value}\n{"".join(traceback.format_tb(tb))}')
     sys.__excepthook__(type, value, tb)

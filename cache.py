@@ -2,11 +2,17 @@ import json
 import os
 import time
 
+import common
+
+
+common.init_env()
+
 
 class Cache:
-    def __init__(self, filepath_supplier, timeout_sec):
+    def __init__(self, filepath_supplier, timeout_sec=os.environ['CACHE_TIMEOUT_SEC']):
         self.filepath_supplier = filepath_supplier
-        self.timeout_sec = timeout_sec
+        # Default timeout is 4 hours, superceded by .env timeout
+        self._timeout_sec = int(timeout_sec) if timeout_sec and len(timeout_sec) != 0 else 14400
         self.cache = {}
 
     def get(self, key, updater, force_refresh=False):
@@ -26,6 +32,9 @@ class Cache:
                 json.dump(self.cache[key], fp, indent=4)
 
         return self.cache[key], used_cached
+    
+    def set_timeout(self, timeout_sec):
+        self._timeout_sec = int(timeout_sec)
 
     def is_expired(self, filepath):
-        return os.path.exists(filepath) and (time.time() - os.path.getmtime(filepath)) > self.timeout_sec
+        return os.path.exists(filepath) and (time.time() - os.path.getmtime(filepath)) > self._timeout_sec

@@ -23,10 +23,10 @@ db_mappings = {
     'URL': 'db["url"]'
 }
 
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json', timeout_sec=1000000)#TODO change after debug to 3600)
-_client_inst = None
 common.init_env()
+_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json')
+_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json')
+_client_inst = None
 
 
 def _filter_box_property(db):
@@ -48,6 +48,13 @@ def clear_caches():
     _page_cache.cache.clear()
     for f in glob.glob('cache/page_*') + glob.glob('cache/db_*'):
         os.remove(f)
+
+
+def set_cache_timeout(timeout_sec):
+    common.set_env('CACHE_TIMEOUT_SEC', timeout_sec)
+    os.environ['CACHE_TIMEOUT_SEC'] = timeout_sec
+    _db_cache.set_timeout(timeout_sec)
+    _page_cache.set_timeout(timeout_sec)
 
 
 def create_client(force_refresh: bool = False) -> NotionClient:

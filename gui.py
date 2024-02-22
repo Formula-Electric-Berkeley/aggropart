@@ -30,7 +30,7 @@ _current_tab = 'Inventory'
 #TODO only make item assoc-able if there is enough in SSEL
 #TODO add an "ignore" SSEL category
 #TODO make an "aggregate" mode for multiple BOMs (def behavior is to clear all)
-#TODO item in menu to change the inventory cache refresh time
+#TODO option to change from DEBUG to INFO output mode (default to INFO perhaps)
 
 
 class RegistryEvent:
@@ -64,6 +64,7 @@ class SectionTable:
             enable_click_events=True,
             right_click_selects=True
         )
+        self.column_headings = headings
         self.row = -1
         self.col = -1
         self._bound = False
@@ -146,11 +147,15 @@ class SectionTable:
     def clear_values(self):
         self.update_values([])
 
+    def remove_row(self, row):
+        self.table.Values.remove(row)
+
     def update_headings(self, headings):
         # ColumnHeadings property is final
         padded_headings = headings + [''] * (len(self.ColumnHeadings) - len(headings))
         for cid, text in zip(self.ColumnHeadings, padded_headings):
             self.table.Widget.heading(cid, text=text)
+        self.column_headings = padded_headings
 
     @property
     def Values(self):
@@ -158,7 +163,8 @@ class SectionTable:
     
     @property
     def ColumnHeadings(self):
-        return self.table.ColumnHeadings
+        # ColumnHeadings property is final; this accounts for updates
+        return self.column_headings
     
     @property
     def SelectedRows(self):
@@ -184,6 +190,8 @@ def _register_all_events():
     RegistryEvent('Clear All Tables', _clear_tables)
 
     RegistryEvent('Clear Cache::Inventory', inventory.clear_caches)
+    RegistryEvent('Change Cache Timeout::Inventory', lambda: inventory.set_cache_timeout(popups.input_(
+        msg='New cache timeout (in seconds): ', default=os.environ['CACHE_TIMEOUT_SEC'], validator=popups.validate_int)))
     RegistryEvent('Export to JSON::Inventory', lambda: False) #TODO
     RegistryEvent('Insert Item::Inventory', lambda: False) #TODO
     RegistryEvent('Count All Items', lambda: popups.info(audit.all_boxes(count=True)))
@@ -232,13 +240,13 @@ def _export_all_pboms():
 def _find_row_qty(table, search_terms):
     row = table.get_selected_row(fmt=False)
     for s in search_terms:
-        qty = row[table.ColumnHeadings.index(s)] if s in table.ColumnHeadings else None
+        idx = table.ColumnHeadings.index(s)
+        qty = row[idx] if s in table.ColumnHeadings else None
         if qty is not None:
-            return int(qty)
+            return int(qty), idx
 
 
 def _assoc_item_part():
-    #TODO check quantity requested by RBOM against SSEL
     rbom_row = rbom_table.get_selected_row(fmt=False)
     ssel_row = ssel_table.get_selected_row(fmt=False)
     if not rbom_row:
@@ -251,8 +259,8 @@ def _assoc_item_part():
         popups.error('Search was never performed')
         return
     
-    rbom_qty = _find_row_qty(rbom_table, ('Quantity',))
-    ssel_qty = _find_row_qty(ssel_table, ('Quantity Available', 'Stock'))
+    rbom_qty, _ = _find_row_qty(rbom_table, ('Quantity',))
+    ssel_qty, ssel_qty_idx = _find_row_qty(ssel_table, ('Quantity', 'Quantity Available', 'Stock'))
 
     if rbom_qty is not None and ssel_qty is not None and rbom_qty > ssel_qty:
         if not popups.confirm(f'Source quantity {ssel_qty} is less than BOM quantity {rbom_qty}. Proceed anyways?'):
@@ -269,6 +277,17 @@ def _assoc_item_part():
 
     item_part_assoc_map[searcher.last_src].append(rbom_row)
 
+    #TODO remove used quantity from SSEL (needs to not be reflected on inventory cache 
+    # but reflected on future reloads of inventory within the same session)
+
+    # if ssel_qty <= rbom_qty:
+    #     # Remove SSEL row if there are <= 0 remaining after RBOM
+    #     ssel_table.remove_row(ssel_table.Values[ssel_table.row])
+    # else:
+    #     # Otherwise, subtract the RBOM quantity used from the SSEL quantity
+    #     ssel_table.Values[ssel_table.row][ssel_qty_idx] -= rbom_qty
+    # ssel_table.update_values(ssel_table.Values)
+
 
 def _set_current_tab():
     global _current_tab
@@ -282,10 +301,10 @@ def _rm_item_part():
         popups.error('No Processed BOM row selected / row is invalid')
         return
 
-    new_pbom_values = pbom_table.Values
+    pbom_values = pbom_table.Values
     sel_idx = pbom_table.SelectedRows[0]
-    new_pbom_values.pop(sel_idx)
-    pbom_table.update_values(new_pbom_values)
+    pbom_values.pop(sel_idx)
+    pbom_table.update_values(pbom_values)
 
     new_rbom_values = rbom_table.Values
     new_rbom_values.append(item_part_assoc_map[_current_tab][sel_idx])
@@ -345,7 +364,8 @@ def _make_window():
     file_opts = ['Export Current PBOM', 'Export All PBOMs', 'Clear All Tables']
     advanced_inv_opts = ['Get Page by ID', 'Get Page Properties by ID', 'Get DB by ID']
     audit_opts = ['Count All Items', 'Count Box Items', 'Query Box Value', 'Query All Value']
-    inventory_opts = ['Clear Cache::Inventory', 'Export to JSON::Inventory', 'Insert Item::Inventory', 
+    inventory_opts = ['Clear Cache::Inventory', 'Change Cache Timeout::Inventory', 
+                      'Export to JSON::Inventory', 'Insert Item::Inventory', 
                       'Audit', audit_opts, 'Advanced', advanced_inv_opts]
     help_opts = ['Instructions', 'Required BOM Fields', 'About aggropart']
     menu = [psg.Menu([['File', file_opts], ['Inventory', inventory_opts], ['Help', help_opts]], key='-MENUBAR-', p=0)]
