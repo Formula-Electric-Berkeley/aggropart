@@ -6,6 +6,7 @@ TODO add description
 import csv
 import logging
 import os
+import pickle as pkl
 import webbrowser
 
 import pyperclip
@@ -31,6 +32,16 @@ _current_tab = 'Inventory'
 #TODO add an "ignore" SSEL category
 #TODO make an "aggregate" mode for multiple BOMs (def behavior is to clear all)
 #TODO option to change from DEBUG to INFO output mode (default to INFO perhaps)
+
+
+class AutosaveObject:
+    def __init__(self, obj_name):
+        self.filepath = f'cache/autosave_{obj_name}.pkl'
+
+    def update(self, values):
+        with open(self.filepath, 'wb') as f:
+            f.write(pkl.dumps(values))
+            f.flush()
 
 
 class RegistryEvent:
@@ -68,6 +79,7 @@ class SectionTable:
         self.row = -1
         self.col = -1
         self._bound = False
+        self.autosave = AutosaveObject(self.name)
 
     def _click_matcher(self, event, other):
         # Exclude the position, just match the click event
@@ -142,6 +154,7 @@ class SectionTable:
             return self.Values[self.row][self.col]
         
     def update_values(self, values):
+        self.autosave.update(values)
         self.table.update(values=values)
     
     def clear_values(self):
@@ -276,6 +289,7 @@ def _assoc_item_part():
     pbom_table.update_values(new_pbom_values)
 
     item_part_assoc_map[searcher.last_src].append(rbom_row)
+    item_part_assoc_map_autosave.update(item_part_assoc_map)
 
     #TODO remove used quantity from SSEL (needs to not be reflected on inventory cache 
     # but reflected on future reloads of inventory within the same session)
@@ -398,7 +412,10 @@ if __name__ == "__main__":
         'Mouser': SectionTable(bom.mouser_fields, '-MOUSER-TABLE-', 'Mouser'),
         'JLCPCB': SectionTable(bom.jlc_fields, '-JLC-TABLE-', 'JLCPCB')
     }
+    #TODO make this autosave less bad
     item_part_assoc_map = {k: [] for k in pbom_subtables.keys()}
+    item_part_assoc_map_autosave = AutosaveObject('item_part_assoc')
+    item_part_assoc_map.update([]) # Clear autosave
     logging.info('All tables initialized')
 
     search_query_input = psg.Input(s=15, tooltip='Query', key='-SEARCH-QUERY-',
