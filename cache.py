@@ -8,11 +8,11 @@ import common
 common.init_env()
 
 
-class Cache:
+class MultiCache:
     def __init__(self, filepath_supplier, timeout_sec=os.environ['CACHE_TIMEOUT_SEC']):
         self.filepath_supplier = filepath_supplier
         # Default timeout is 4 hours, superceded by .env timeout
-        self._timeout_sec = int(timeout_sec) if timeout_sec and len(timeout_sec) != 0 else 14400
+        self._timeout_sec = int(timeout_sec) if timeout_sec and (type(timeout_sec) is not str or len(timeout_sec) != 0) else 14400
         self.cache = {}
 
     def get(self, key, updater, force_refresh=False):
@@ -38,3 +38,23 @@ class Cache:
 
     def is_expired(self, filepath):
         return os.path.exists(filepath) and (time.time() - os.path.getmtime(filepath)) > self._timeout_sec
+
+
+class SingleCache:
+    def __init__(self, filepath):
+        self.filepath = filepath
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as fp:
+                self.cache = json.load(fp)
+        else:
+            with open(filepath, 'w'):
+                pass
+            self.cache = {}
+
+    def get(self, key, updater):
+        if key not in self.cache:
+            updater(self.cache, key)
+            with open(self.filepath, 'w') as fp:
+                json.dump(self.cache, fp)
+        return self.cache[key]
+        

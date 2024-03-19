@@ -12,7 +12,7 @@ import sys
 from notion_client import Client as NotionClient
 
 import common
-from cache import Cache
+from cache import MultiCache
 
 
 db_mappings = {
@@ -24,8 +24,8 @@ db_mappings = {
 }
 
 common.init_env()
-_db_cache = Cache(lambda db_id: f'cache/db_{db_id}.json')
-_page_cache = Cache(lambda page_id: f'cache/page_{page_id}.json')
+_db_cache = MultiCache(lambda db_id: f'cache/db_{db_id}.json')
+_page_cache = MultiCache(lambda page_id: f'cache/page_{page_id}.json')
 _client_inst = None
 
 

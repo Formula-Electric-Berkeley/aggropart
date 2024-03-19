@@ -1,0 +1,15 @@
+{
+    "AddressLocationTypeID": "Residential",
+    "CountryCode": "US",
+    "FirstName": "",
+    "LastName": "",
+    "AttentionLine": "",
+    "Company": "",
+    "AddressOne": "",
+    "AddressTwo": "",
+    "City": "",
+    "StateOrProvince": "",
+    "PostalCode": "",
+    "PhoneNumber": "",
+    "EmailAddress": ""
+  }
