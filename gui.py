@@ -32,6 +32,7 @@ _current_tab = 'Inventory'
 #TODO add an "ignore" SSEL category
 #TODO make an "aggregate" mode for multiple BOMs (def behavior is to clear all)
 #TODO option to change from DEBUG to INFO output mode (default to INFO perhaps)
+#TODO BUGFIX: second search update causes header issue, crash
 
 
 class AutosaveObject:

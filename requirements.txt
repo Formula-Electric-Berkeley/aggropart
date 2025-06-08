@@ -12,3 +12,4 @@ requests==2.31.0
 segno==1.6.0
 selenium==4.17.2
 textencoder==0.1.6
+Js2Py~=0.74
