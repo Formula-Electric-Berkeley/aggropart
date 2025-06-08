@@ -51,10 +51,12 @@ def clear_caches():
 
 
 def set_cache_timeout(timeout_sec):
-    common.set_env('CACHE_TIMEOUT_SEC', timeout_sec)
-    os.environ['CACHE_TIMEOUT_SEC'] = timeout_sec
-    _db_cache.set_timeout(timeout_sec)
-    _page_cache.set_timeout(timeout_sec)
+    # timeout_sec == False occurs if "Cancel" is clicked
+    if timeout_sec is not False:
+        common.set_env('CACHE_TIMEOUT_SEC', timeout_sec)
+        os.environ['CACHE_TIMEOUT_SEC'] = timeout_sec
+        _db_cache.set_timeout(timeout_sec)
+        _page_cache.set_timeout(timeout_sec)
 
 
 def create_client(force_refresh: bool = False) -> NotionClient:
