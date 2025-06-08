@@ -39,7 +39,7 @@ def _item_is_valid(item: dict) -> bool:
     """User customizable function to filter out unwanted inventory entries."""
     # Equivalent to a blank Project property field (EECS inventory) AND belonging to an EECS inventory box
     prop = item['properties']
-    return prop['📽️ Projects']['id'] == 'fdLi' and len(prop['Box']['relation']) != 0
+    return prop['📽️ Projects']['id'] == 'fdLi' and ('Box' not in prop or len(prop['Box']['relation']) != 0)
 
 
 def clear_caches():

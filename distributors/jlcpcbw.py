@@ -8,6 +8,10 @@ import re
 import bs4
 import urllib.parse
 import urllib.request
+import string
+import js2py
+
+COMPONENT_ID_ORDER = string.ascii_lowercase + string.ascii_uppercase + '_' + '$'
 
 
 class JLCItem:
@@ -23,7 +27,7 @@ class JLCItem:
 item_fields = {
     'JLCPCB Part Number': JLCItem(
         '_item_metavals(parser)[2].text',
-        '_find_by_class(parser, "part-type", "a").attrs.get("href").rsplit("/")[-1]',
+        '_find_by_class(parser, "item", "a").attrs.get("href").rsplit("/")[-1]',
         ''),
     'Mfg Part Number': JLCItem(
         '_item_metavals(parser)[1].text',
@@ -51,7 +55,7 @@ item_fields = {
 
 def _item_metavals(parser: bs4.BeautifulSoup) -> bs4.ResultSet:
     #TODO fix this; the data-v-XXXX tag changes periodically
-    return parser.find_all('dd', {'data-v-6e69987b': True})
+    return parser.find_all('div', {'data-v-71f56eca': True})
 
 
 def _find_by_class(parser, classname, tag='div'):
@@ -65,9 +69,18 @@ def search_items(keyword):
     resp = req.read()
     parser = bs4.BeautifulSoup(resp, features='html.parser')
     # Typo from mountable to mounable on JLC's side
-    component_table = parser.find('div', {'class': 'c-mounable-components-list'})
-    component_rows = component_table.find_all('div', {'class': 'simulation-table-item-row'})
-    return [_filter_item(row, lambda v: v.search_eval) for row in component_rows]
+    nuxt_script = parser.find('script', text=re.compile('.*__NUXT__.*'))
+    nuxt_text = nuxt_script.text
+    nuxt_js = js2py.eval_js(nuxt_text)
+    try:
+        part_num = nuxt_js['data'][0]['presaleTypeTabs'][0]['tableInfo']['tableList'][0]['componentCode']
+        return [{'JLCPCB Part Number': part_num}]
+    except TypeError:
+        return [{'JLCPCB Part Number': ''}]
+    # component_table = parser.find('div', {'class': 'el-table__body-wrapper'})
+    # component_rows = component_table.find_all('tr', {'class': 'el-table__row'})
+    # print(component_rows[0].find('a', {'class': 'item'}))
+    # return [_filter_item(row, lambda v: v.search_eval) for row in component_rows]
 
 
 def get_item(part_number: str) -> dict:

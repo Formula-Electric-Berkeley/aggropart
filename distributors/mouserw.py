@@ -8,7 +8,7 @@ import os
 
 import requests
 
-TIMEOUT = 10
+TIMEOUT = 25
 
 
 fake_response_item = {
