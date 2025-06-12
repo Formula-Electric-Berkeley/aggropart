@@ -9,8 +9,8 @@ import common
 from distributors import mouserw, digikeyw, jlcpcbw
 import inventory
 
-
-START_IDX = 873
+START_IDX = 0
+DISALLOWED_CHAR_TRANSLATION = {'”': '\"', '\n': ', ', '?': '', '’': '\'', '“': '\"'}
 GENERATE_BOXES = False
 API_BASE = 'http://127.0.0.1:5000'
 
@@ -50,6 +50,9 @@ def main():
         # Swap manufacturer part number and description if CER or RES in mfg P/N (SMD components)
         if 'CER' in mfg_part_num or 'RES' in mfg_part_num:
             desc, mfg_part_num = mfg_part_num, desc
+        if len(mfg_part_num) == 0:
+            mfg_part_num = '(no part number found)'
+        mfg_part_num = _sanitize(mfg_part_num)
 
         # Get DK, Mouser, JLC part numbers for INV1 item
         digikey_resp = digikeyw.search_items(mfg_part_num).exact_manufacturer_products
@@ -89,7 +92,7 @@ def _sanitize(v):
     Unclean characters are replaced with empty string: \n, ?
     Smart quotes are replaced with normal double quotes
     """
-    return v.replace('”', '"').replace('\n', ', ').replace('?', '') if isinstance(v, str) else v
+    return v.translate(DISALLOWED_CHAR_TRANSLATION) if isinstance(v, str) else v
 
 
 if __name__ == '__main__':
